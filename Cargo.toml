@@ -14,6 +14,7 @@ bevy = { version = "0.8.1", default-features = true }
 chrono = { version = "0.4", features = ["wasmbind"] }
 bevy_simple_tilemap = "0.9.0"
 bevy_ninepatch = "0.8.0"
+bevy_easings = "0.8.1"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires

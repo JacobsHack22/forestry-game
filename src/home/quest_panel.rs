@@ -3,7 +3,8 @@ use bevy::prelude::*;
 use bevy::text::{Text2dBounds, Text2dSize};
 use bevy_simple_tilemap::prelude::*;
 use bevy_simple_tilemap::plugin::SimpleTileMapPlugin;
-use crate::data::CurrentQuest;
+use chrono::{DateTime, Duration, Local};
+use crate::data::{CurrentQuestInfo, QuestCompletedEvent};
 
 pub struct QuestPanelPlugin;
 
@@ -12,8 +13,8 @@ impl Plugin for QuestPanelPlugin {
         app
             .add_plugin(SimpleTileMapPlugin)
             .add_startup_system(setup_quest_panel)
-            .add_system(update_quest_panel)
-            .add_system(update_quest_panel_transform);
+            .add_system(update_quest_panel_content)
+            .add_system(update_quest_panel_ui);
     }
 }
 
@@ -40,6 +41,11 @@ struct QuestHeader;
 
 #[derive(Component, Default, Clone, Copy)]
 struct QuestDescription;
+
+#[derive(Component, Default, Clone, Copy)]
+struct QuestButton {
+    is_pressed: bool
+}
 
 fn generate_panel_tilemap(tiles_info: TiledPanel) -> TileMap {
     let mut tiles = Vec::<(IVec3, Option<Tile>)>::new();
@@ -86,12 +92,13 @@ fn setup_quest_panel(
     asset_server: Res<AssetServer>,
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,
 ) {
-    let texture_handle = asset_server.load("sprites/8x8_quest_panel.png");
+    let panel_texture_handle = asset_server.load("sprites/8x8_quest_panel.png");
+    let button_texture_handle = asset_server.load("sprites/button.png");
     let font = asset_server.load("fonts/at01.ttf");
 
     let header_text_style = TextStyle {
         font: font.clone(),
-        font_size: 100.0,
+        font_size: 130.0,
         color: Color::BLACK,
     };
     let description_text_style = TextStyle {
@@ -102,16 +109,24 @@ fn setup_quest_panel(
 
     let tile_size = 8.0;
 
-    let texture_atlas =
+    let panel_atlas =
         TextureAtlas::from_grid(
-            texture_handle.clone(),
+            panel_texture_handle,
             vec2(tile_size, tile_size),
             3, 3,
         );
-    let texture_atlas_handle = texture_atlases.add(texture_atlas);
+    let panel_atlas_handle = texture_atlases.add(panel_atlas);
+
+    let button_atlas =
+        TextureAtlas::from_grid(
+            button_texture_handle,
+            vec2(32.0, 16.0),
+            1, 2,
+        );
+    let button_atlas_handle = texture_atlases.add(button_atlas);
 
     let tiles_info = TiledPanel {
-        tiled_size: IVec2::new(3, 6),
+        tiled_size: IVec2::new(3, 7),
         top_left_tile: 0,
         top_right_tile: 2,
         top_tile: 1,
@@ -129,11 +144,11 @@ fn setup_quest_panel(
     let text_box_scaled_height = text_box_height / text_scale;
     let tile_size_scaled = tile_size / text_scale;
 
-    let text_top_margin = tile_size * 0.15;
+    let text_top_margin = tile_size * 0.4;
 
     commands
         .spawn_bundle(TileMapBundle {
-            texture_atlas: texture_atlas_handle.clone(),
+            texture_atlas: panel_atlas_handle,
             tilemap: generate_panel_tilemap(tiles_info),
             ..Default::default()
         })
@@ -157,7 +172,7 @@ fn setup_quest_panel(
                 text: Text::from_section("Description", description_text_style.clone())
                     .with_alignment(TextAlignment::TOP_LEFT),
                 transform: Transform {
-                    translation: vec3(-text_box_width / 2.0, -tile_size / 2.0 - text_top_margin, 1.0),
+                    translation: vec3(-text_box_width / 2.0, -tile_size / 2.0 - text_top_margin * 1.5, 1.0),
                     rotation: Quat::default(),
                     // scale: Vec3::splat(1.0)
                     scale: Vec3::splat(text_scale),
@@ -165,6 +180,13 @@ fn setup_quest_panel(
                 text_2d_bounds: Text2dBounds { size: vec2(text_box_scaled_width, text_box_scaled_height) },
                 ..default()
             }).insert(QuestDescription);
+
+            let button_pos = vec3(0.0, -text_box_height + tile_size * 2.0, 1.0);
+            parent.spawn_bundle(SpriteSheetBundle {
+                texture_atlas: button_atlas_handle,
+                transform: Transform::from_translation(button_pos),
+                ..default()
+            }).insert(QuestButton::default());
         });
 }
 
@@ -181,13 +203,54 @@ fn cursor_to_world(window: &Window, cam_transform: &Transform, cursor_pos: Vec2)
     Vec2::new(out.x, out.y)
 }
 
+fn format_duration(duration: Duration) -> String {
+    if duration >= Duration::days(365) {
+        let years = duration.num_days() / 365;
+        years.to_string() + " years"
+    } else if duration >= Duration::weeks(1) {
+        duration.num_weeks().to_string() + "w"
+    } else if duration >= Duration::days(1) {
+        duration.num_days().to_string() + "d"
+    } else if duration >= Duration::hours(1) {
+        duration.num_days().to_string() + "h"
+    } else {
+        duration.num_seconds().to_string() + "s"
+    }
+}
+
+fn update_quest_panel_content(
+    mut panels: Query<&mut Visibility, With<QuestPanel>>,
+    mut headers: Query<&mut Text, (With<QuestHeader>, Without<QuestDescription>)>,
+    mut descriptions: Query<&mut Text, (With<QuestDescription>, Without<QuestHeader>)>,
+    current_quest: Res<CurrentQuestInfo>,
+) {
+    let mut visibility = panels.single_mut();
+
+    let mut header_text = headers.single_mut();
+    let mut description_text = descriptions.single_mut();
+
+    if let Some(quest) = current_quest.current_quest.as_ref() {
+        let time_remaining = quest.deadline - DateTime::from(Local::now());
+        let title = quest.quest.name.clone();
+        let description = quest.quest.description.clone();
+
+        visibility.is_visible = true;
+        header_text.sections.first_mut().unwrap().value =
+            title + " in " + format_duration(time_remaining).as_str();
+        description_text.sections.first_mut().unwrap().value = description;
+    } else {
+        visibility.is_visible = false;
+    }
+}
+
 fn panel_y_from_expansion_fraction(
     panel_height: f32,
     window_height: f32,
     tile_height: f32,
     expansion_fraction: f32,
 ) -> f32 {
-    return (panel_height - tile_height) * expansion_fraction + tile_height * 0.5 - window_height * 0.5;
+    let add_top_margin = tile_height * 0.5;
+    return (panel_height - tile_height - add_top_margin) * expansion_fraction + add_top_margin + tile_height * 0.5 - window_height * 0.5;
 }
 
 fn expansion_fraction_from_panel_y(
@@ -196,36 +259,17 @@ fn expansion_fraction_from_panel_y(
     tile_height: f32,
     panel_y: f32,
 ) -> f32 {
-    return (panel_y + window_height * 0.5 - tile_height * 0.5) / (panel_height - tile_height);
+    let add_top_margin = tile_height * 0.5;
+    return (panel_y + window_height * 0.5 - tile_height * 0.5 - add_top_margin) / (panel_height - tile_height - add_top_margin);
 }
 
-fn update_quest_panel(
-    mut panels: Query<(&mut QuestPanel, &mut Visibility), (Without<QuestHeader>, Without<QuestDescription>)>,
-    mut headers: Query<&mut Text, (With<QuestHeader>, Without<QuestPanel>, Without<QuestDescription>)>,
-    mut descriptions: Query<&mut Text, (With<QuestDescription>, Without<QuestHeader>, Without<QuestPanel>)>,
-    current_quest: Res<CurrentQuest>,
-) {
-    let (panel, visibility) = panels.single_mut();
-    let mut panel: Mut<QuestPanel> = panel;
-    let mut visibility: Mut<Visibility> = visibility;
-
-    let mut header_text = headers.single_mut();
-    let mut description_text = descriptions.single_mut();
-
-    if let Some(quest) = current_quest.quest.as_ref() {
-        visibility.is_visible = true;
-        header_text.sections.first_mut().unwrap().value = quest.quest.name.clone();
-        description_text.sections.first_mut().unwrap().value = quest.quest.description.clone();
-    } else {
-        visibility.is_visible = false;
-    }
-}
-
-fn update_quest_panel_transform(
+fn update_quest_panel_ui(
     mut panels: Query<(&mut Transform, &mut QuestPanel, &Visibility)>,
     cameras: Query<&Transform, (With<Camera>, Without<QuestPanel>)>,
+    mut buttons: Query<(&GlobalTransform, &mut QuestButton, &mut TextureAtlasSprite)>,
     windows: Res<Windows>,
-    buttons: Res<Input<MouseButton>>,
+    mouse_buttons: Res<Input<MouseButton>>,
+    mut quest_completed_events: EventWriter<QuestCompletedEvent>
 ) {
     let window = windows.get_primary().unwrap();
     let cam_transform = cameras.single();
@@ -234,6 +278,11 @@ fn update_quest_panel_transform(
     let mut panel_transform: Mut<Transform> = panel_transform;
     let mut panel: Mut<QuestPanel> = panel;
     let visibility: &Visibility = visibility;
+
+    let (button_global_transform, button, button_sprite) = buttons.single_mut();
+    let button_global_transform: &GlobalTransform = button_global_transform;
+    let mut button: Mut<QuestButton> = button;
+    let mut button_sprite: Mut<TextureAtlasSprite> = button_sprite;
 
     if !visibility.is_visible {
         return;
@@ -255,17 +304,29 @@ fn update_quest_panel_transform(
         );
     panel_transform.translation.z = 5.0;
 
-    if !buttons.pressed(MouseButton::Left) {
+    if !mouse_buttons.pressed(MouseButton::Left) {
         panel.dragged_from = None;
     }
 
     if let Some(cursor_pos) = window.cursor_position() {
         let cursor_pos = cursor_to_world(window, cam_transform, cursor_pos);
 
-        if buttons.just_pressed(MouseButton::Left) {
+        let button_pos = button_global_transform.translation();
+
+        if mouse_buttons.just_pressed(MouseButton::Left) {
             let panel_top = panel_transform.translation.y + tile_size * panel_scale / 2.0;
-            if cursor_pos.y < panel_top {
+            let panel_content_top = panel_top - tile_size * panel_scale;
+            if cursor_pos.y < panel_top && cursor_pos.y > panel_content_top {
                 panel.dragged_from = Some(cursor_pos);
+            }
+
+            if cursor_pos.y < button_pos.y + panel_scale * 16.0 / 2.0 &&
+                cursor_pos.y > button_pos.y - panel_scale * 16.0 / 2.0 &&
+                cursor_pos.x < button_pos.x + panel_scale * 32.0 / 2.0 &&
+                cursor_pos.x > button_pos.x - panel_scale * 32.0 / 2.0 &&
+                !button.is_pressed {
+                button.is_pressed = true;
+                button_sprite.index = 1;
             }
         } else if let Some(dragged_from) = panel.dragged_from.as_mut() {
             let max_y = panel_y_from_expansion_fraction(
@@ -291,7 +352,16 @@ fn update_quest_panel_transform(
                     panel_transform.translation.y,
                 );
         }
+
     } else {
         panel.dragged_from = None;
+    }
+
+    if mouse_buttons.just_released(MouseButton::Left) {
+        if button.is_pressed {
+            button.is_pressed = false;
+            button_sprite.index = 0;
+            quest_completed_events.send(QuestCompletedEvent);
+        }
     }
 }
