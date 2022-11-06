@@ -1,8 +1,10 @@
 use bevy::prelude::*;
 use bevy::app::{App, Plugin};
+use bevy::math::vec3;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef};
 use bevy::reflect::TypeUuid;
 use bevy::sprite::{Material2d, Material2dPlugin, MaterialMesh2dBundle};
+use bevy_easings::{Ease, EasingType, EaseFunction, EasingsPlugin};
 use chrono::{DateTime, Utc};
 use crate::data::{CurrentQuestInfo, CurrentTree, Health, QuestCompletedEvent, QuestMissedEvent, TreeInfo};
 
@@ -13,7 +15,8 @@ impl Plugin for ProcTreePlugin {
         app
             .add_plugin(Material2dPlugin::<CustomMaterial>::default())
             .add_startup_system(setup_proc_tree)
-            .add_system(update_proc_tree);
+            .add_system(update_proc_tree)
+            .add_system(handle_quest_events);
     }
 }
 
@@ -60,7 +63,7 @@ fn setup_proc_tree(mut commands: Commands,
 fn update_proc_tree(
     mut proc_trees: Query<&mut TextureAtlasSprite, With<ProcTree>>,
     mut current_tree: Res<CurrentTree>,
-    mut trees_info: Query<&TreeInfo>
+    mut trees_info: Query<&TreeInfo>,
 ) {
     let current_tree = trees_info.get(current_tree.0).unwrap();
     for mut tree_sprite in proc_trees.iter_mut() {
@@ -74,17 +77,64 @@ fn update_proc_tree(
 }
 
 fn handle_quest_events(
+    mut commands: Commands,
     mut quest_completed_events: EventReader<QuestCompletedEvent>,
     mut quest_missed_events: EventReader<QuestMissedEvent>,
+    asset_server: Res<AssetServer>,
 ) {
+    let good_popup_handle = asset_server.load("sprites/emote_heart.png");
+    let bad_popup_handle = asset_server.load("sprites/emote_broken_heart.png");
+
     let quest_completed = !quest_completed_events.is_empty();
     let quest_missed = !quest_missed_events.is_empty();
 
     if quest_completed {
-        
+        spawn_popup(&mut commands, good_popup_handle);
     } else if quest_missed {
-
+        spawn_popup(&mut commands, bad_popup_handle);
     }
+}
+
+fn spawn_popup(commands: &mut Commands, popup_texture_handle: Handle<Image>) {
+    commands
+        .spawn_bundle(
+            SpriteBundle {
+                texture: popup_texture_handle,
+                ..default()
+            },
+        )
+        .insert(
+            Transform {
+                translation: vec3(0.0, 0.0, 1.0),
+                rotation: Quat::default(),
+                scale: Vec3::splat(1.0),
+            }.ease_to(
+                Transform {
+                    translation: vec3(0.0, 50.0, 1.0),
+                    rotation: Quat::default(),
+                    scale: Vec3::splat(1.0),
+                },
+                EaseFunction::QuadraticIn,
+                EasingType::Once {
+                    duration: std::time::Duration::from_millis(500),
+                },
+            )
+        )
+        .insert(
+            Sprite {
+                color: Color::rgba(1.0, 1.0, 1.0, 1.0),
+                ..default()
+            }.ease_to(
+                Sprite {
+                    color: Color::rgba(1.0, 1.0, 1.0, 0.0),
+                    ..default()
+                },
+                EaseFunction::QuadraticIn,
+                EasingType::Once {
+                    duration: std::time::Duration::from_millis(500),
+                },
+            )
+        );
 }
 
 #[derive(AsBindGroup, Clone, TypeUuid)]

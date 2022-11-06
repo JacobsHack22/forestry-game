@@ -99,6 +99,8 @@ pub struct TreeItem {
 
 pub struct CurrentTree(pub Entity);
 
+pub struct QuestAppearedEvent;
+
 pub struct QuestCompletedEvent;
 
 pub struct QuestMissedEvent;
@@ -114,6 +116,7 @@ impl Plugin for DataPlugin {
             .add_startup_system(fill_quest_pool)
             .add_event::<QuestCompletedEvent>()
             .add_event::<QuestMissedEvent>()
+            .add_event::<QuestAppearedEvent>()
             .add_system(handle_events)
             .add_system(check_deadline)
             .add_system(check_next_quest);
@@ -164,6 +167,7 @@ fn check_deadline(
 
 fn check_next_quest(
     mut current_quest_info: ResMut<CurrentQuestInfo>,
+    mut quest_appeared_events: EventWriter<QuestAppearedEvent>,
     mut quest_pool: ResMut<QuestPool>,
 ) {
     let since_last_quest_finished =
@@ -172,6 +176,7 @@ fn check_next_quest(
         since_last_quest_finished > Duration::seconds(5) {
         if let Some(quest) = quest_pool.queue.pop_front() {
             current_quest_info.current_quest = Some(quest.into());
+            quest_appeared_events.send(QuestAppearedEvent);
         }
     }
 }
@@ -179,6 +184,7 @@ fn check_next_quest(
 fn fill_quest_pool(
     mut quest_pool: ResMut<QuestPool>,
     mut current_quest_info: ResMut<CurrentQuestInfo>,
+    mut quest_appeared_events: EventWriter<QuestAppearedEvent>,
 ) {
     quest_pool.queue.push_back(Quest {
         name: "Tidy up".to_string(),
@@ -191,4 +197,5 @@ fn fill_quest_pool(
         time_to_complete: Duration::seconds(30),
     });
     current_quest_info.current_quest = Some(quest_pool.queue.pop_front().unwrap().into());
+    quest_appeared_events.send(QuestAppearedEvent);
 }

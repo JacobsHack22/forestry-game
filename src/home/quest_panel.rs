@@ -1,10 +1,12 @@
+use bevy::ecs::system::EntityCommands;
 use bevy::math::{ivec3, vec2, vec3};
 use bevy::prelude::*;
 use bevy::text::{Text2dBounds, Text2dSize};
+use bevy_easings::{CustomComponentEase, EaseFunction, EaseValue, EasingType, Lerp};
 use bevy_simple_tilemap::prelude::*;
 use bevy_simple_tilemap::plugin::SimpleTileMapPlugin;
 use chrono::{DateTime, Duration, Local};
-use crate::data::{CurrentQuestInfo, QuestCompletedEvent};
+use crate::data::{CurrentQuestInfo, QuestAppearedEvent, QuestCompletedEvent, QuestMissedEvent};
 
 pub struct QuestPanelPlugin;
 
@@ -14,7 +16,8 @@ impl Plugin for QuestPanelPlugin {
             .add_plugin(SimpleTileMapPlugin)
             .add_startup_system(setup_quest_panel)
             .add_system(update_quest_panel_content)
-            .add_system(update_quest_panel_ui);
+            .add_system(update_quest_panel_ui)
+            .add_system(handle_quest_events);
     }
 }
 
@@ -31,6 +34,7 @@ struct TiledPanel {
 
 #[derive(Component, Default)]
 struct QuestPanel {
+    pub draggable: bool,
     pub expansion_fraction: f32,
     pub dragged_from: Option<Vec2>,
     pub tiles_info: TiledPanel,
@@ -44,7 +48,18 @@ struct QuestDescription;
 
 #[derive(Component, Default, Clone, Copy)]
 struct QuestButton {
-    is_pressed: bool
+    is_pressed: bool,
+}
+
+impl Lerp for QuestPanel {
+    type Scalar = f32;
+
+    fn lerp(&self, other: &Self, scalar: &Self::Scalar) -> Self {
+        QuestPanel {
+            expansion_fraction: self.expansion_fraction.lerp(&other.expansion_fraction, scalar),
+            ..*other
+        }
+    }
 }
 
 fn generate_panel_tilemap(tiles_info: TiledPanel) -> TileMap {
@@ -214,18 +229,15 @@ fn format_duration(duration: Duration) -> String {
     } else if duration >= Duration::hours(1) {
         duration.num_days().to_string() + "h"
     } else {
-        duration.num_seconds().to_string() + "s"
+        duration.num_seconds().max(0).to_string() + "s"
     }
 }
 
 fn update_quest_panel_content(
-    mut panels: Query<&mut Visibility, With<QuestPanel>>,
     mut headers: Query<&mut Text, (With<QuestHeader>, Without<QuestDescription>)>,
     mut descriptions: Query<&mut Text, (With<QuestDescription>, Without<QuestHeader>)>,
     current_quest: Res<CurrentQuestInfo>,
 ) {
-    let mut visibility = panels.single_mut();
-
     let mut header_text = headers.single_mut();
     let mut description_text = descriptions.single_mut();
 
@@ -234,13 +246,58 @@ fn update_quest_panel_content(
         let title = quest.quest.name.clone();
         let description = quest.quest.description.clone();
 
-        visibility.is_visible = true;
         header_text.sections.first_mut().unwrap().value =
             title + " in " + format_duration(time_remaining).as_str();
         description_text.sections.first_mut().unwrap().value = description;
-    } else {
-        visibility.is_visible = false;
     }
+}
+
+fn handle_quest_events(
+    mut commands: Commands,
+    mut panel: Query<(Entity, &mut QuestPanel)>,
+    mut quest_completed_events: EventReader<QuestCompletedEvent>,
+    mut quest_missed_events: EventReader<QuestMissedEvent>,
+    mut quest_appeared_events: EventReader<QuestAppearedEvent>,
+) {
+    let (panel_entity, mut panel) = panel.single_mut();
+
+    let quest_completed = !quest_completed_events.is_empty();
+    let quest_missed = !quest_missed_events.is_empty();
+    let quest_appeared = !quest_appeared_events.is_empty();
+
+    if quest_appeared {
+        println!("SRRAAAAAL");
+        panel.draggable = true;
+        animate_panel(&mut commands, panel_entity, &panel, -0.2, 0.0);
+    } else if quest_completed || quest_missed {
+        panel.draggable = false;
+        animate_panel(&mut commands, panel_entity, &panel, panel.expansion_fraction, -0.2);
+    }
+}
+
+fn animate_panel(
+    commands: &mut Commands,
+    panel_entity: Entity,
+    panel: &QuestPanel,
+    start: f32,
+    finish: f32,
+) {
+    commands.entity(panel_entity)
+        .insert(
+            QuestPanel {
+                expansion_fraction: start,
+                ..*panel
+            }.ease_to(
+                QuestPanel {
+                    expansion_fraction: finish,
+                    ..*panel
+                },
+                EaseFunction::QuadraticIn,
+                EasingType::Once {
+                    duration: std::time::Duration::from_millis(500),
+                },
+            )
+        );
 }
 
 fn panel_y_from_expansion_fraction(
@@ -264,29 +321,26 @@ fn expansion_fraction_from_panel_y(
 }
 
 fn update_quest_panel_ui(
-    mut panels: Query<(&mut Transform, &mut QuestPanel, &Visibility)>,
+    mut panels: Query<(&mut Transform, &mut QuestPanel)>,
     cameras: Query<&Transform, (With<Camera>, Without<QuestPanel>)>,
     mut buttons: Query<(&GlobalTransform, &mut QuestButton, &mut TextureAtlasSprite)>,
     windows: Res<Windows>,
     mouse_buttons: Res<Input<MouseButton>>,
-    mut quest_completed_events: EventWriter<QuestCompletedEvent>
+    mut quest_completed_events: EventWriter<QuestCompletedEvent>,
 ) {
     let window = windows.get_primary().unwrap();
     let cam_transform = cameras.single();
 
-    let (panel_transform, panel, visibility) = panels.single_mut();
+    let (panel_transform, panel) = panels.single_mut();
     let mut panel_transform: Mut<Transform> = panel_transform;
     let mut panel: Mut<QuestPanel> = panel;
-    let visibility: &Visibility = visibility;
 
     let (button_global_transform, button, button_sprite) = buttons.single_mut();
     let button_global_transform: &GlobalTransform = button_global_transform;
     let mut button: Mut<QuestButton> = button;
     let mut button_sprite: Mut<TextureAtlasSprite> = button_sprite;
 
-    if !visibility.is_visible {
-        return;
-    }
+    // println!("{:?}", panel.expansion_fraction);
 
     let tile_size = 8.0;
     let panel_tiled_width = panel.tiles_info.tiled_size.x * 2 + 1;
@@ -304,7 +358,7 @@ fn update_quest_panel_ui(
         );
     panel_transform.translation.z = 5.0;
 
-    if !mouse_buttons.pressed(MouseButton::Left) {
+    if !mouse_buttons.pressed(MouseButton::Left) || !panel.draggable {
         panel.dragged_from = None;
     }
 
@@ -352,7 +406,6 @@ fn update_quest_panel_ui(
                     panel_transform.translation.y,
                 );
         }
-
     } else {
         panel.dragged_from = None;
     }

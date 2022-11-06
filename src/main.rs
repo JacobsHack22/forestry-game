@@ -3,6 +3,7 @@
 
 use bevy::prelude::*;
 use bevy::render::texture::ImageSettings;
+use bevy_easings::EasingsPlugin;
 use crate::data::DataPlugin;
 use crate::home::HomePlugin;
 
@@ -22,6 +23,7 @@ fn main() {
             ..Default::default()
         })
         .add_plugins(DefaultPlugins)
+        .add_plugin(EasingsPlugin)
         .add_startup_system(setup)
         .add_plugin(DataPlugin)
         .add_plugin(HomePlugin)
