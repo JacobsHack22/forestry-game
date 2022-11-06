@@ -2,12 +2,19 @@
 //! interaction state.
 
 use bevy::prelude::*;
+use bevy::render::texture::ImageSettings;
+use crate::data::DataPlugin;
+use crate::home::HomePlugin;
+
+mod data;
+mod home;
 
 fn main() {
     #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
 
     App::new()
+        .insert_resource(ImageSettings::default_nearest())
         .insert_resource(WindowDescriptor {
             width: 375.,
             height: 812.,
@@ -16,6 +23,8 @@ fn main() {
         })
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup)
+        .add_plugin(DataPlugin)
+        .add_plugin(HomePlugin)
         .add_system(button_system)
         .run();
 }
@@ -50,32 +59,6 @@ fn button_system(
     }
 }
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    // ui camera
+fn setup(mut commands: Commands) {
     commands.spawn_bundle(Camera2dBundle::default());
-    commands
-        .spawn_bundle(ButtonBundle {
-            style: Style {
-                size: Size::new(Val::Px(150.0), Val::Px(65.0)),
-                // center button
-                margin: UiRect::all(Val::Auto),
-                // horizontally center child text
-                justify_content: JustifyContent::Center,
-                // vertically center child text
-                align_items: AlignItems::Center,
-                ..default()
-            },
-            color: NORMAL_BUTTON.into(),
-            ..default()
-        })
-        .with_children(|parent| {
-            parent.spawn_bundle(TextBundle::from_section(
-                "Button",
-                TextStyle {
-                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
-                    font_size: 40.0,
-                    color: Color::rgb(0.9, 0.9, 0.9),
-                },
-            ));
-        });
 }

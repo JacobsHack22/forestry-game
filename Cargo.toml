@@ -5,11 +5,14 @@ authors = ["SmnTin <smn.pankv@gmail.com>"]
 edition = "2021"
 resolver = "2"
 
-[features]
+[target.'cfg(target_arch = "wasm32")'.features]
 default = ["console_error_panic_hook"]
 
 [dependencies]
 wasm-bindgen = "0.2.63"
+bevy = {version = "0.8.1", default-features = true}
+chrono = "0.4"
+bevy_simple_tilemap = "0.9.0"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires
@@ -32,11 +35,10 @@ trunk = "0.16.0"
 # Tell `rustc` to optimize for small code size.
 opt-level = "s"
 
-## Dependencies for native only.
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-bevy = {version = "0.8.1", default-features = true}
-
-# Dependencies for WASM only.
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-bevy = {version = "0.8.1", default-features = true}
-#bevy_webgl2 = "0.5"
+### Dependencies for native only.
+#[target.'cfg(not(target_arch = "wasm32"))'.dependencies.bevy]
+#features = ["bevy_asset", "bevy_animation", "bevy_audio", "bevy_ui", "bevy_sprite", "bevy_winit", "bevy_scene"]
+#
+## Dependencies for WASM only.
+#[target.'cfg(target_arch = "wasm32")'.dependencies.bevy]
+#features = ["bevy_asset", "bevy_animation", "bevy_audio", "bevy_ui", "bevy_sprite", "bevy_winit", "bevy_scene"]
