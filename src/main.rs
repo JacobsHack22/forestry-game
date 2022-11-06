@@ -16,6 +16,8 @@ fn main() {
 
     App::new()
         .insert_resource(ImageSettings::default_nearest())
+        // .insert_resource(ClearColor(Color::rgb(52.0 / 255.0, 59.0 / 255.0, 153.0 / 255.0)))
+        .insert_resource(ClearColor(Color::rgb(156.0 / 255.0, 181.0 / 255.0, 218.0 / 255.0)))
         .insert_resource(WindowDescriptor {
             width: 375.,
             height: 812.,

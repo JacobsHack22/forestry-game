@@ -187,13 +187,18 @@ fn fill_quest_pool(
     mut quest_appeared_events: EventWriter<QuestAppearedEvent>,
 ) {
     quest_pool.queue.push_back(Quest {
-        name: "Tidy up".to_string(),
-        description: "Clean your place after submitting your JacobsHack entry".to_string(),
+        name: "Test".to_string(),
+        description: "... test".to_string(),
         time_to_complete: Duration::seconds(30),
     });
     quest_pool.queue.push_back(Quest {
-        name: "Suck my dick".to_string(),
-        description: "... and lick my balls of course".to_string(),
+        name: "Cheer up".to_string(),
+        description: "No ecological revolution can be done in a bad mood".to_string(),
+        time_to_complete: Duration::seconds(8),
+    });
+    quest_pool.queue.push_back(Quest {
+        name: "Tidy up".to_string(),
+        description: "Clean your place after submitting your JacobsHack entry".to_string(),
         time_to_complete: Duration::seconds(30),
     });
     current_quest_info.current_quest = Some(quest_pool.queue.pop_front().unwrap().into());

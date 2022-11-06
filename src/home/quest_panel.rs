@@ -2,7 +2,7 @@ use bevy::ecs::system::EntityCommands;
 use bevy::math::{ivec3, vec2, vec3};
 use bevy::prelude::*;
 use bevy::text::{Text2dBounds, Text2dSize};
-use bevy_easings::{CustomComponentEase, EaseFunction, EaseValue, EasingType, Lerp};
+use bevy_easings::{custom_ease_system, CustomComponentEase, EaseFunction, EaseValue, EasingType, Lerp};
 use bevy_simple_tilemap::prelude::*;
 use bevy_simple_tilemap::plugin::SimpleTileMapPlugin;
 use chrono::{DateTime, Duration, Local};
@@ -15,6 +15,7 @@ impl Plugin for QuestPanelPlugin {
         app
             .add_plugin(SimpleTileMapPlugin)
             .add_startup_system(setup_quest_panel)
+            .add_system(custom_ease_system::<QuestPanel>)
             .add_system(update_quest_panel_content)
             .add_system(update_quest_panel_ui)
             .add_system(handle_quest_events);
@@ -266,7 +267,6 @@ fn handle_quest_events(
     let quest_appeared = !quest_appeared_events.is_empty();
 
     if quest_appeared {
-        println!("SRRAAAAAL");
         panel.draggable = true;
         animate_panel(&mut commands, panel_entity, &panel, -0.2, 0.0);
     } else if quest_completed || quest_missed {

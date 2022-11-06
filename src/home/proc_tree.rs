@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy::app::{App, Plugin};
-use bevy::math::vec3;
+use bevy::math::{vec2, vec3};
 use bevy::render::render_resource::{AsBindGroup, ShaderRef};
 use bevy::reflect::TypeUuid;
 use bevy::sprite::{Material2d, Material2dPlugin, MaterialMesh2dBundle};
@@ -48,8 +48,8 @@ fn setup_proc_tree(mut commands: Commands,
                    mut meshes: ResMut<Assets<Mesh>>,
                    mut materials: ResMut<Assets<CustomMaterial>>,
                    mut texture_atlases: ResMut<Assets<TextureAtlas>>) {
-    let texture_handle = asset_server.load("sprites/48x48_trees.png");
-    let texture_atlas = TextureAtlas::from_grid(texture_handle, Vec2::new(48.0, 48.0), 4, 1);
+    let texture_handle = asset_server.load("sprites/season-trees-spritesheet.png");
+    let texture_atlas = TextureAtlas::from_grid(texture_handle, Vec2::new(64.0, 64.0), 40, 1);
     let texture_atlas_handle = texture_atlases.add(texture_atlas);
     commands
         .spawn_bundle(SpriteSheetBundle {
@@ -69,9 +69,9 @@ fn update_proc_tree(
     for mut tree_sprite in proc_trees.iter_mut() {
         tree_sprite.index =
             match current_tree.health {
-                Health::Good => 1,
-                Health::Moderate => 3,
-                Health::Bad => 0
+                Health::Good => 0,
+                Health::Moderate => 24,
+                Health::Bad => 32
             }
     }
 }
@@ -82,20 +82,22 @@ fn handle_quest_events(
     mut quest_missed_events: EventReader<QuestMissedEvent>,
     asset_server: Res<AssetServer>,
 ) {
-    let good_popup_handle = asset_server.load("sprites/emote_heart.png");
+    let good_popup_handle = asset_server.load("sprites/heart.png");
     let bad_popup_handle = asset_server.load("sprites/emote_broken_heart.png");
 
     let quest_completed = !quest_completed_events.is_empty();
     let quest_missed = !quest_missed_events.is_empty();
 
     if quest_completed {
-        spawn_popup(&mut commands, good_popup_handle);
+        spawn_popup(&mut commands, good_popup_handle.clone(), vec2(-50., 0.), 6.0);
+        spawn_popup(&mut commands, good_popup_handle.clone(), vec2(50., 60.), 6.0);
+        spawn_popup(&mut commands, good_popup_handle.clone(), vec2(30., -40.), 6.0);
     } else if quest_missed {
-        spawn_popup(&mut commands, bad_popup_handle);
+        spawn_popup(&mut commands, bad_popup_handle, vec2(0., 0.), 1.0);
     }
 }
 
-fn spawn_popup(commands: &mut Commands, popup_texture_handle: Handle<Image>) {
+fn spawn_popup(commands: &mut Commands, popup_texture_handle: Handle<Image>, position: Vec2, scale: f32) {
     commands
         .spawn_bundle(
             SpriteBundle {
@@ -105,14 +107,14 @@ fn spawn_popup(commands: &mut Commands, popup_texture_handle: Handle<Image>) {
         )
         .insert(
             Transform {
-                translation: vec3(0.0, 0.0, 1.0),
+                translation: position.extend(0.0) + vec3(0.0, 0.0, 1.0),
                 rotation: Quat::default(),
-                scale: Vec3::splat(1.0),
+                scale: Vec3::splat(1.0 * scale),
             }.ease_to(
                 Transform {
-                    translation: vec3(0.0, 50.0, 1.0),
+                    translation: position.extend(0.0) + vec3(0.0, 50.0, 1.0),
                     rotation: Quat::default(),
-                    scale: Vec3::splat(1.0),
+                    scale: Vec3::splat(1.0 * scale),
                 },
                 EaseFunction::QuadraticIn,
                 EasingType::Once {
