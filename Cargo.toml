@@ -10,8 +10,8 @@ default = ["console_error_panic_hook"]
 
 [dependencies]
 wasm-bindgen = "0.2.63"
-bevy = {version = "0.8.1", default-features = true}
-chrono = "0.4"
+bevy = { version = "0.8.1", default-features = true }
+chrono = { version = "0.4", features = ["wasmbind"] }
 bevy_simple_tilemap = "0.9.0"
 bevy_ninepatch = "0.8.0"
 

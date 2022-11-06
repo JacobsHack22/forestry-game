@@ -57,7 +57,7 @@ impl Default for CurrentQuest {
                     description: "Clean your place after submitting your JacobsHack entry".to_string(),
                     time_to_complete: Duration::hours(1)
                 },
-                deadline: DateTime::from(SystemTime::now()).add(Duration::hours(1))
+                deadline: DateTime::from(Local::now()).add(Duration::hours(1))
             })
         }
     }

@@ -41,11 +41,6 @@ struct QuestHeader;
 #[derive(Component, Default, Clone, Copy)]
 struct QuestDescription;
 
-#[derive(Default)]
-struct QuestPanelInfo {
-    pub mouse_pos: Vec2,
-}
-
 fn generate_panel_tilemap(tiles_info: TiledPanel) -> TileMap {
     let mut tiles = Vec::<(IVec3, Option<Tile>)>::new();
 
@@ -149,7 +144,7 @@ fn setup_quest_panel(
         .insert(Name::from("Panel"))
         .with_children(|parent| {
             parent.spawn_bundle(Text2dBundle {
-                text: Text::from_section("Ya ebu sobak", header_text_style.clone())
+                text: Text::from_section("Header", header_text_style.clone())
                     .with_alignment(TextAlignment::CENTER),
                 transform: Transform {
                     translation: vec3(0.0, -text_top_margin, 1.0),
@@ -157,9 +152,9 @@ fn setup_quest_panel(
                     scale: Vec3::splat(text_scale),
                 },
                 ..default()
-            }).insert(QuestDescription);
+            }).insert(QuestHeader);
             parent.spawn_bundle(Text2dBundle {
-                text: Text::from_section("Vsegda gotov trahnut srazu neskolko kotov", description_text_style.clone())
+                text: Text::from_section("Description", description_text_style.clone())
                     .with_alignment(TextAlignment::TOP_LEFT),
                 transform: Transform {
                     translation: vec3(-text_box_width / 2.0, -tile_size / 2.0 - text_top_margin, 1.0),
@@ -171,9 +166,6 @@ fn setup_quest_panel(
                 ..default()
             }).insert(QuestDescription);
         });
-    commands.insert_resource(QuestPanelInfo {
-        ..default()
-    })
 }
 
 fn cursor_to_world(window: &Window, cam_transform: &Transform, cursor_pos: Vec2) -> Vec2 {
@@ -208,15 +200,22 @@ fn expansion_fraction_from_panel_y(
 }
 
 fn update_quest_panel(
-    mut panels: Query<(&mut QuestPanel, &mut Visibility)>,
+    mut panels: Query<(&mut QuestPanel, &mut Visibility), (Without<QuestHeader>, Without<QuestDescription>)>,
+    mut headers: Query<&mut Text, (With<QuestHeader>, Without<QuestPanel>, Without<QuestDescription>)>,
+    mut descriptions: Query<&mut Text, (With<QuestDescription>, Without<QuestHeader>, Without<QuestPanel>)>,
     current_quest: Res<CurrentQuest>,
 ) {
     let (panel, visibility) = panels.single_mut();
     let mut panel: Mut<QuestPanel> = panel;
     let mut visibility: Mut<Visibility> = visibility;
 
+    let mut header_text = headers.single_mut();
+    let mut description_text = descriptions.single_mut();
+
     if let Some(quest) = current_quest.quest.as_ref() {
         visibility.is_visible = true;
+        header_text.sections.first_mut().unwrap().value = quest.quest.name.clone();
+        description_text.sections.first_mut().unwrap().value = quest.quest.description.clone();
     } else {
         visibility.is_visible = false;
     }
