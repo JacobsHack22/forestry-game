@@ -1,8 +1,9 @@
 use bevy::math::{ivec3, vec2, vec3};
 use bevy::prelude::*;
-use bevy_simple_tilemap::prelude::TileMapBundle;
-use bevy_simple_tilemap::{Tile, TileMap};
+use bevy::text::{Text2dBounds, Text2dSize};
+use bevy_simple_tilemap::prelude::*;
 use bevy_simple_tilemap::plugin::SimpleTileMapPlugin;
+use crate::data::CurrentQuest;
 
 pub struct QuestPanelPlugin;
 
@@ -11,7 +12,8 @@ impl Plugin for QuestPanelPlugin {
         app
             .add_plugin(SimpleTileMapPlugin)
             .add_startup_system(setup_quest_panel)
-            .add_system(update_quest_panel);
+            .add_system(update_quest_panel)
+            .add_system(update_quest_panel_transform);
     }
 }
 
@@ -32,6 +34,12 @@ struct QuestPanel {
     pub dragged_from: Option<Vec2>,
     pub tiles_info: TiledPanel,
 }
+
+#[derive(Component, Default, Clone, Copy)]
+struct QuestHeader;
+
+#[derive(Component, Default, Clone, Copy)]
+struct QuestDescription;
 
 #[derive(Default)]
 struct QuestPanelInfo {
@@ -84,8 +92,27 @@ fn setup_quest_panel(
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,
 ) {
     let texture_handle = asset_server.load("sprites/8x8_quest_panel.png");
+    let font = asset_server.load("fonts/at01.ttf");
+
+    let header_text_style = TextStyle {
+        font: font.clone(),
+        font_size: 100.0,
+        color: Color::BLACK,
+    };
+    let description_text_style = TextStyle {
+        font,
+        font_size: 100.0,
+        color: Color::DARK_GRAY,
+    };
+
+    let tile_size = 8.0;
+
     let texture_atlas =
-        TextureAtlas::from_grid(texture_handle, vec2(8.0, 8.0), 3, 3);
+        TextureAtlas::from_grid(
+            texture_handle.clone(),
+            vec2(tile_size, tile_size),
+            3, 3,
+        );
     let texture_atlas_handle = texture_atlases.add(texture_atlas);
 
     let tiles_info = TiledPanel {
@@ -98,10 +125,20 @@ fn setup_quest_panel(
         fill_tile: 4,
     };
 
+    let text_scale = 0.05;
+    let panel_tiled_width = tiles_info.tiled_size.x * 2 + 1;
+    let panel_tiled_height = tiles_info.tiled_size.y;
+    let text_box_width = tile_size * (panel_tiled_width as f32 - 1.0);
+    let text_box_height = tile_size * (panel_tiled_height as f32);
+    let text_box_scaled_width = text_box_width / text_scale;
+    let text_box_scaled_height = text_box_height / text_scale;
+    let tile_size_scaled = tile_size / text_scale;
+
+    let text_top_margin = tile_size * 0.15;
+
     commands
         .spawn_bundle(TileMapBundle {
             texture_atlas: texture_atlas_handle.clone(),
-            transform: Transform::from_scale(Vec3::splat(3.0)),
             tilemap: generate_panel_tilemap(tiles_info),
             ..Default::default()
         })
@@ -109,7 +146,31 @@ fn setup_quest_panel(
             tiles_info,
             ..default()
         })
-        .insert(Name::from("Panel"));
+        .insert(Name::from("Panel"))
+        .with_children(|parent| {
+            parent.spawn_bundle(Text2dBundle {
+                text: Text::from_section("Ya ebu sobak", header_text_style.clone())
+                    .with_alignment(TextAlignment::CENTER),
+                transform: Transform {
+                    translation: vec3(0.0, -text_top_margin, 1.0),
+                    rotation: Quat::default(),
+                    scale: Vec3::splat(text_scale),
+                },
+                ..default()
+            }).insert(QuestDescription);
+            parent.spawn_bundle(Text2dBundle {
+                text: Text::from_section("Vsegda gotov trahnut srazu neskolko kotov", description_text_style.clone())
+                    .with_alignment(TextAlignment::TOP_LEFT),
+                transform: Transform {
+                    translation: vec3(-text_box_width / 2.0, -tile_size / 2.0 - text_top_margin, 1.0),
+                    rotation: Quat::default(),
+                    // scale: Vec3::splat(1.0)
+                    scale: Vec3::splat(text_scale),
+                },
+                text_2d_bounds: Text2dBounds { size: vec2(text_box_scaled_width, text_box_scaled_height) },
+                ..default()
+            }).insert(QuestDescription);
+        });
     commands.insert_resource(QuestPanelInfo {
         ..default()
     })
@@ -132,7 +193,7 @@ fn panel_y_from_expansion_fraction(
     panel_height: f32,
     window_height: f32,
     tile_height: f32,
-    expansion_fraction: f32
+    expansion_fraction: f32,
 ) -> f32 {
     return (panel_height - tile_height) * expansion_fraction + tile_height * 0.5 - window_height * 0.5;
 }
@@ -141,13 +202,28 @@ fn expansion_fraction_from_panel_y(
     panel_height: f32,
     window_height: f32,
     tile_height: f32,
-    panel_y: f32
+    panel_y: f32,
 ) -> f32 {
     return (panel_y + window_height * 0.5 - tile_height * 0.5) / (panel_height - tile_height);
 }
 
 fn update_quest_panel(
-    mut panels: Query<(&mut Transform, &mut QuestPanel)>,
+    mut panels: Query<(&mut QuestPanel, &mut Visibility)>,
+    current_quest: Res<CurrentQuest>,
+) {
+    let (panel, visibility) = panels.single_mut();
+    let mut panel: Mut<QuestPanel> = panel;
+    let mut visibility: Mut<Visibility> = visibility;
+
+    if let Some(quest) = current_quest.quest.as_ref() {
+        visibility.is_visible = true;
+    } else {
+        visibility.is_visible = false;
+    }
+}
+
+fn update_quest_panel_transform(
+    mut panels: Query<(&mut Transform, &mut QuestPanel, &Visibility)>,
     cameras: Query<&Transform, (With<Camera>, Without<QuestPanel>)>,
     windows: Res<Windows>,
     buttons: Res<Input<MouseButton>>,
@@ -155,13 +231,18 @@ fn update_quest_panel(
     let window = windows.get_primary().unwrap();
     let cam_transform = cameras.single();
 
-    let (panel_transform, panel) = panels.single_mut();
+    let (panel_transform, panel, visibility) = panels.single_mut();
     let mut panel_transform: Mut<Transform> = panel_transform;
     let mut panel: Mut<QuestPanel> = panel;
+    let visibility: &Visibility = visibility;
+
+    if !visibility.is_visible {
+        return;
+    }
 
     let tile_size = 8.0;
     let panel_tiled_width = panel.tiles_info.tiled_size.x * 2 + 1;
-    let panel_width = window.width().min(window.height() * 0.5);
+    let panel_width = window.width().min(window.height() * 0.7);
     let panel_scale = panel_width / tile_size / (panel_tiled_width as f32);
     panel_transform.scale = Vec3::splat(panel_scale);
 
@@ -173,7 +254,7 @@ fn update_quest_panel(
             tile_size * panel_scale,
             panel.expansion_fraction,
         );
-    // panel_transform.translation.z = 5.0;
+    panel_transform.translation.z = 5.0;
 
     if !buttons.pressed(MouseButton::Left) {
         panel.dragged_from = None;
@@ -192,13 +273,13 @@ fn update_quest_panel(
                 panel_height,
                 window.height(),
                 tile_size * panel_scale,
-                1.0
+                1.0,
             );
             let min_y = panel_y_from_expansion_fraction(
                 panel_height,
                 window.height(),
                 tile_size * panel_scale,
-                0.0
+                0.0,
             );
             panel_transform.translation.y += cursor_pos.y - dragged_from.y;
             panel_transform.translation.y = panel_transform.translation.y.min(max_y).max(min_y);

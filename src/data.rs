@@ -1,6 +1,8 @@
+use std::ops::Add;
+use std::time::SystemTime;
 use bevy::app::{App, Plugin};
 use bevy::prelude::{Bundle, Commands, Component, Entity};
-use chrono::{DateTime, Local, Duration};
+use chrono::{DateTime, Local, Duration, FixedOffset};
 
 pub enum TreeKind {
     Birch,
@@ -42,10 +44,23 @@ pub struct TreeItem {
     pub info: TreeInfo,
 }
 
-
-#[derive(Default)]
 pub struct CurrentQuest {
     pub quest: Option<ActiveQuest>
+}
+
+impl Default for CurrentQuest {
+    fn default() -> Self {
+        CurrentQuest {
+            quest: Some(ActiveQuest {
+                quest: Quest {
+                    name: "Tidy up".to_string(),
+                    description: "Clean your place after submitting your JacobsHack entry".to_string(),
+                    time_to_complete: Duration::hours(1)
+                },
+                deadline: DateTime::from(SystemTime::now()).add(Duration::hours(1))
+            })
+        }
+    }
 }
 
 pub struct CurrentTree(Entity);
