@@ -1,9 +1,7 @@
-use std::collections::VecDeque;
-use bevy::prelude::*;
-use std::ops::Add;
-use std::time::SystemTime;
 use bevy::app::{App, Plugin};
-use chrono::{DateTime, Local, Duration, FixedOffset, Utc};
+use bevy::prelude::*;
+use chrono::{DateTime, Duration, Local, Utc};
+use std::collections::VecDeque;
 
 pub enum TreeKind {
     Birch,
@@ -23,7 +21,7 @@ impl Health {
         *self = match self {
             Health::Bad => Health::Bad,
             Health::Moderate => Health::Bad,
-            Health::Good => Health::Moderate
+            Health::Good => Health::Moderate,
         };
     }
 
@@ -31,7 +29,7 @@ impl Health {
         *self = match self {
             Health::Bad => Health::Moderate,
             Health::Moderate => Health::Good,
-            Health::Good => Health::Good
+            Health::Good => Health::Good,
         };
     }
 
@@ -109,8 +107,7 @@ pub struct DataPlugin;
 
 impl Plugin for DataPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .add_startup_system(current_tree_setup)
+        app.add_startup_system(current_tree_setup)
             .insert_resource(CurrentQuestInfo::default())
             .insert_resource(QuestPool::default())
             .add_startup_system(fill_quest_pool)
@@ -124,16 +121,14 @@ impl Plugin for DataPlugin {
 }
 
 fn current_tree_setup(mut commands: Commands) {
-    let default_tree = commands
-        .spawn_bundle(TreeItem::default())
-        .id();
+    let default_tree = commands.spawn_bundle(TreeItem::default()).id();
 
     commands.insert_resource(CurrentTree(default_tree));
 }
 
 fn handle_events(
-    mut quest_completed_events: EventReader<QuestCompletedEvent>,
-    mut quest_missed_events: EventReader<QuestMissedEvent>,
+    quest_completed_events: EventReader<QuestCompletedEvent>,
+    quest_missed_events: EventReader<QuestMissedEvent>,
     mut current_quest_info: ResMut<CurrentQuestInfo>,
     current_tree: Res<CurrentTree>,
     mut tree_items: Query<&mut TreeInfo>,
@@ -155,7 +150,7 @@ fn handle_events(
 }
 
 fn check_deadline(
-    mut current_quest: ResMut<CurrentQuestInfo>,
+    current_quest: ResMut<CurrentQuestInfo>,
     mut quest_missed_events: EventWriter<QuestMissedEvent>,
 ) {
     if let Some(active_quest) = current_quest.current_quest.as_ref() {
@@ -172,8 +167,9 @@ fn check_next_quest(
 ) {
     let since_last_quest_finished =
         DateTime::from(Utc::now()) - current_quest_info.last_quest_finished;
-    if current_quest_info.current_quest.is_none() &&
-        since_last_quest_finished > Duration::seconds(5) {
+    if current_quest_info.current_quest.is_none()
+        && since_last_quest_finished > Duration::seconds(5)
+    {
         if let Some(quest) = quest_pool.queue.pop_front() {
             current_quest_info.current_quest = Some(quest.into());
             quest_appeared_events.send(QuestAppearedEvent);

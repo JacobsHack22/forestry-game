@@ -1,19 +1,17 @@
-use bevy::ecs::system::EntityCommands;
+use crate::data::{CurrentQuestInfo, QuestAppearedEvent, QuestCompletedEvent, QuestMissedEvent};
 use bevy::math::{ivec3, vec2, vec3};
 use bevy::prelude::*;
-use bevy::text::{Text2dBounds, Text2dSize};
-use bevy_easings::{custom_ease_system, CustomComponentEase, EaseFunction, EaseValue, EasingType, Lerp};
-use bevy_simple_tilemap::prelude::*;
+use bevy::text::Text2dBounds;
+use bevy_easings::{custom_ease_system, CustomComponentEase, EaseFunction, EasingType, Lerp};
 use bevy_simple_tilemap::plugin::SimpleTileMapPlugin;
+use bevy_simple_tilemap::prelude::*;
 use chrono::{DateTime, Duration, Local};
-use crate::data::{CurrentQuestInfo, QuestAppearedEvent, QuestCompletedEvent, QuestMissedEvent};
 
 pub struct QuestPanelPlugin;
 
 impl Plugin for QuestPanelPlugin {
     fn build(&self, app: &mut App) {
-        app
-            .add_plugin(SimpleTileMapPlugin)
+        app.add_plugin(SimpleTileMapPlugin)
             .add_startup_system(setup_quest_panel)
             .add_system(custom_ease_system::<QuestPanel>)
             .add_system(update_quest_panel_content)
@@ -57,7 +55,9 @@ impl Lerp for QuestPanel {
 
     fn lerp(&self, other: &Self, scalar: &Self::Scalar) -> Self {
         QuestPanel {
-            expansion_fraction: self.expansion_fraction.lerp(&other.expansion_fraction, scalar),
+            expansion_fraction: self
+                .expansion_fraction
+                .lerp(&other.expansion_fraction, scalar),
             ..*other
         }
     }
@@ -69,32 +69,50 @@ fn generate_panel_tilemap(tiles_info: TiledPanel) -> TileMap {
     let tiled_x = tiles_info.tiled_size.x;
     tiles.push((
         ivec3(-tiled_x, 0, 0),
-        Some(Tile { sprite_index: tiles_info.top_left_tile, ..default() })
+        Some(Tile {
+            sprite_index: tiles_info.top_left_tile,
+            ..default()
+        }),
     ));
     tiles.push((
         ivec3(tiled_x, 0, 0),
-        Some(Tile { sprite_index: tiles_info.top_right_tile, ..default() })
+        Some(Tile {
+            sprite_index: tiles_info.top_right_tile,
+            ..default()
+        }),
     ));
     for x in (-tiled_x + 1)..=(tiled_x - 1) {
         tiles.push((
             ivec3(x, 0, 0),
-            Some(Tile { sprite_index: tiles_info.top_tile, ..default() })
+            Some(Tile {
+                sprite_index: tiles_info.top_tile,
+                ..default()
+            }),
         ));
         for y in 1..tiles_info.tiled_size.y {
             tiles.push((
                 ivec3(x, -y, 0),
-                Some(Tile { sprite_index: tiles_info.fill_tile, ..default() })
+                Some(Tile {
+                    sprite_index: tiles_info.fill_tile,
+                    ..default()
+                }),
             ));
         }
     }
     for y in 1..tiles_info.tiled_size.y {
         tiles.push((
             ivec3(-tiled_x, -y, 0),
-            Some(Tile { sprite_index: tiles_info.left_tile, ..default() })
+            Some(Tile {
+                sprite_index: tiles_info.left_tile,
+                ..default()
+            }),
         ));
         tiles.push((
             ivec3(tiled_x, -y, 0),
-            Some(Tile { sprite_index: tiles_info.right_tile, ..default() })
+            Some(Tile {
+                sprite_index: tiles_info.right_tile,
+                ..default()
+            }),
         ));
     }
 
@@ -126,19 +144,10 @@ fn setup_quest_panel(
     let tile_size = 8.0;
 
     let panel_atlas =
-        TextureAtlas::from_grid(
-            panel_texture_handle,
-            vec2(tile_size, tile_size),
-            3, 3,
-        );
+        TextureAtlas::from_grid(panel_texture_handle, vec2(tile_size, tile_size), 3, 3);
     let panel_atlas_handle = texture_atlases.add(panel_atlas);
 
-    let button_atlas =
-        TextureAtlas::from_grid(
-            button_texture_handle,
-            vec2(32.0, 16.0),
-            1, 2,
-        );
+    let button_atlas = TextureAtlas::from_grid(button_texture_handle, vec2(32.0, 16.0), 1, 2);
     let button_atlas_handle = texture_atlases.add(button_atlas);
 
     let tiles_info = TiledPanel {
@@ -158,7 +167,6 @@ fn setup_quest_panel(
     let text_box_height = tile_size * (panel_tiled_height as f32);
     let text_box_scaled_width = text_box_width / text_scale;
     let text_box_scaled_height = text_box_height / text_scale;
-    let tile_size_scaled = tile_size / text_scale;
 
     let text_top_margin = tile_size * 0.4;
 
@@ -174,35 +182,47 @@ fn setup_quest_panel(
         })
         .insert(Name::from("Panel"))
         .with_children(|parent| {
-            parent.spawn_bundle(Text2dBundle {
-                text: Text::from_section("Header", header_text_style.clone())
-                    .with_alignment(TextAlignment::CENTER),
-                transform: Transform {
-                    translation: vec3(0.0, -text_top_margin, 1.0),
-                    rotation: Quat::default(),
-                    scale: Vec3::splat(text_scale),
-                },
-                ..default()
-            }).insert(QuestHeader);
-            parent.spawn_bundle(Text2dBundle {
-                text: Text::from_section("Description", description_text_style.clone())
-                    .with_alignment(TextAlignment::TOP_LEFT),
-                transform: Transform {
-                    translation: vec3(-text_box_width / 2.0, -tile_size / 2.0 - text_top_margin * 1.5, 1.0),
-                    rotation: Quat::default(),
-                    // scale: Vec3::splat(1.0)
-                    scale: Vec3::splat(text_scale),
-                },
-                text_2d_bounds: Text2dBounds { size: vec2(text_box_scaled_width, text_box_scaled_height) },
-                ..default()
-            }).insert(QuestDescription);
+            parent
+                .spawn_bundle(Text2dBundle {
+                    text: Text::from_section("Header", header_text_style.clone())
+                        .with_alignment(TextAlignment::CENTER),
+                    transform: Transform {
+                        translation: vec3(0.0, -text_top_margin, 1.0),
+                        rotation: Quat::default(),
+                        scale: Vec3::splat(text_scale),
+                    },
+                    ..default()
+                })
+                .insert(QuestHeader);
+            parent
+                .spawn_bundle(Text2dBundle {
+                    text: Text::from_section("Description", description_text_style.clone())
+                        .with_alignment(TextAlignment::TOP_LEFT),
+                    transform: Transform {
+                        translation: vec3(
+                            -text_box_width / 2.0,
+                            -tile_size / 2.0 - text_top_margin * 1.5,
+                            1.0,
+                        ),
+                        rotation: Quat::default(),
+                        // scale: Vec3::splat(1.0)
+                        scale: Vec3::splat(text_scale),
+                    },
+                    text_2d_bounds: Text2dBounds {
+                        size: vec2(text_box_scaled_width, text_box_scaled_height),
+                    },
+                    ..default()
+                })
+                .insert(QuestDescription);
 
             let button_pos = vec3(0.0, -text_box_height + tile_size * 2.0, 1.0);
-            parent.spawn_bundle(SpriteSheetBundle {
-                texture_atlas: button_atlas_handle,
-                transform: Transform::from_translation(button_pos),
-                ..default()
-            }).insert(QuestButton::default());
+            parent
+                .spawn_bundle(SpriteSheetBundle {
+                    texture_atlas: button_atlas_handle,
+                    transform: Transform::from_translation(button_pos),
+                    ..default()
+                })
+                .insert(QuestButton::default());
         });
 }
 
@@ -256,9 +276,9 @@ fn update_quest_panel_content(
 fn handle_quest_events(
     mut commands: Commands,
     mut panel: Query<(Entity, &mut QuestPanel)>,
-    mut quest_completed_events: EventReader<QuestCompletedEvent>,
-    mut quest_missed_events: EventReader<QuestMissedEvent>,
-    mut quest_appeared_events: EventReader<QuestAppearedEvent>,
+    quest_completed_events: EventReader<QuestCompletedEvent>,
+    quest_missed_events: EventReader<QuestMissedEvent>,
+    quest_appeared_events: EventReader<QuestAppearedEvent>,
 ) {
     let (panel_entity, mut panel) = panel.single_mut();
 
@@ -271,7 +291,13 @@ fn handle_quest_events(
         animate_panel(&mut commands, panel_entity, &panel, -0.2, 0.0);
     } else if quest_completed || quest_missed {
         panel.draggable = false;
-        animate_panel(&mut commands, panel_entity, &panel, panel.expansion_fraction, -0.2);
+        animate_panel(
+            &mut commands,
+            panel_entity,
+            &panel,
+            panel.expansion_fraction,
+            -0.2,
+        );
     }
 }
 
@@ -282,22 +308,22 @@ fn animate_panel(
     start: f32,
     finish: f32,
 ) {
-    commands.entity(panel_entity)
-        .insert(
+    commands.entity(panel_entity).insert(
+        QuestPanel {
+            expansion_fraction: start,
+            ..*panel
+        }
+        .ease_to(
             QuestPanel {
-                expansion_fraction: start,
+                expansion_fraction: finish,
                 ..*panel
-            }.ease_to(
-                QuestPanel {
-                    expansion_fraction: finish,
-                    ..*panel
-                },
-                EaseFunction::QuadraticIn,
-                EasingType::Once {
-                    duration: std::time::Duration::from_millis(500),
-                },
-            )
-        );
+            },
+            EaseFunction::QuadraticIn,
+            EasingType::Once {
+                duration: std::time::Duration::from_millis(500),
+            },
+        ),
+    );
 }
 
 fn panel_y_from_expansion_fraction(
@@ -307,7 +333,10 @@ fn panel_y_from_expansion_fraction(
     expansion_fraction: f32,
 ) -> f32 {
     let add_top_margin = tile_height * 0.5;
-    return (panel_height - tile_height - add_top_margin) * expansion_fraction + add_top_margin + tile_height * 0.5 - window_height * 0.5;
+    return (panel_height - tile_height - add_top_margin) * expansion_fraction
+        + add_top_margin
+        + tile_height * 0.5
+        - window_height * 0.5;
 }
 
 fn expansion_fraction_from_panel_y(
@@ -317,7 +346,8 @@ fn expansion_fraction_from_panel_y(
     panel_y: f32,
 ) -> f32 {
     let add_top_margin = tile_height * 0.5;
-    return (panel_y + window_height * 0.5 - tile_height * 0.5 - add_top_margin) / (panel_height - tile_height - add_top_margin);
+    return (panel_y + window_height * 0.5 - tile_height * 0.5 - add_top_margin)
+        / (panel_height - tile_height - add_top_margin);
 }
 
 fn update_quest_panel_ui(
@@ -349,13 +379,12 @@ fn update_quest_panel_ui(
     panel_transform.scale = Vec3::splat(panel_scale);
 
     let panel_height = tile_size * panel_scale * (panel.tiles_info.tiled_size.y as f32);
-    panel_transform.translation.y =
-        panel_y_from_expansion_fraction(
-            panel_height,
-            window.height(),
-            tile_size * panel_scale,
-            panel.expansion_fraction,
-        );
+    panel_transform.translation.y = panel_y_from_expansion_fraction(
+        panel_height,
+        window.height(),
+        tile_size * panel_scale,
+        panel.expansion_fraction,
+    );
     panel_transform.translation.z = 5.0;
 
     if !mouse_buttons.pressed(MouseButton::Left) || !panel.draggable {
@@ -374,11 +403,12 @@ fn update_quest_panel_ui(
                 panel.dragged_from = Some(cursor_pos);
             }
 
-            if cursor_pos.y < button_pos.y + panel_scale * 16.0 / 2.0 &&
-                cursor_pos.y > button_pos.y - panel_scale * 16.0 / 2.0 &&
-                cursor_pos.x < button_pos.x + panel_scale * 32.0 / 2.0 &&
-                cursor_pos.x > button_pos.x - panel_scale * 32.0 / 2.0 &&
-                !button.is_pressed {
+            if cursor_pos.y < button_pos.y + panel_scale * 16.0 / 2.0
+                && cursor_pos.y > button_pos.y - panel_scale * 16.0 / 2.0
+                && cursor_pos.x < button_pos.x + panel_scale * 32.0 / 2.0
+                && cursor_pos.x > button_pos.x - panel_scale * 32.0 / 2.0
+                && !button.is_pressed
+            {
                 button.is_pressed = true;
                 button_sprite.index = 1;
             }
@@ -398,13 +428,12 @@ fn update_quest_panel_ui(
             panel_transform.translation.y += cursor_pos.y - dragged_from.y;
             panel_transform.translation.y = panel_transform.translation.y.min(max_y).max(min_y);
             dragged_from.y = cursor_pos.y;
-            panel.expansion_fraction =
-                expansion_fraction_from_panel_y(
-                    panel_height,
-                    window.height(),
-                    tile_size * panel_scale,
-                    panel_transform.translation.y,
-                );
+            panel.expansion_fraction = expansion_fraction_from_panel_y(
+                panel_height,
+                window.height(),
+                tile_size * panel_scale,
+                panel_transform.translation.y,
+            );
         }
     } else {
         panel.dragged_from = None;
