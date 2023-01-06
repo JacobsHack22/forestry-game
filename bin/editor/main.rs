@@ -4,11 +4,8 @@
 use bevy::prelude::*;
 use bevy::render::texture::ImageSettings;
 use bevy_easings::EasingsPlugin;
-use crate::data::DataPlugin;
-use crate::home::HomePlugin;
-
-mod data;
-mod home;
+use game::data::DataPlugin;
+use game::home::HomePlugin;
 
 fn main() {
     #[cfg(feature = "console_error_panic_hook")]
@@ -25,11 +22,6 @@ fn main() {
             ..Default::default()
         })
         .add_plugins(DefaultPlugins)
-        .add_plugin(EasingsPlugin)
-        .add_startup_system(setup)
-        .add_plugin(DataPlugin)
-        .add_plugin(HomePlugin)
-        .add_system(button_system)
         .run();
 }
 

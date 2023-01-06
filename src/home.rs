@@ -1,8 +1,6 @@
 use bevy::prelude::*;
 use crate::home::proc_tree::ProcTreePlugin;
 use crate::home::quest_panel::QuestPanelPlugin;
-use crate::NORMAL_BUTTON;
-use super::data::*;
 
 mod quest_panel;
 mod proc_tree;

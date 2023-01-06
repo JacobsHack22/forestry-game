@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["SmnTin <smn.pankv@gmail.com>"]
 edition = "2021"
 resolver = "2"
+default-run = "app"
 
 [target.'cfg(target_arch = "wasm32")'.features]
 default = ["console_error_panic_hook"]
@@ -15,6 +16,18 @@ chrono = { version = "0.4", features = ["wasmbind"] }
 bevy_simple_tilemap = "0.9.0"
 bevy_ninepatch = "0.8.0"
 bevy_easings = "0.8.1"
+
+[lib]
+name = "game"
+path = "src/lib.rs"
+
+[[bin]]
+name = "app"
+path = "bin/app/main.rs"
+
+[[bin]]
+name = "editor"
+path = "bin/editor/main.rs"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires

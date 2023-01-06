@@ -14,7 +14,9 @@ impl Plugin for ProcTreePlugin {
     fn build(&self, app: &mut App) {
         app
             .add_plugin(Material2dPlugin::<CustomMaterial>::default())
+            .insert_resource(ProcTreeSystem::default())
             .add_startup_system(setup_proc_tree)
+            .add_startup_system(setup_proc_tree_plugin)
             .add_system(update_proc_tree)
             .add_system(handle_quest_events);
     }
@@ -42,6 +44,18 @@ impl Plugin for ProcTreePlugin {
 
 #[derive(Component)]
 struct ProcTree;
+
+#[derive(Default)]
+struct ProcTreeSystem {
+    pub good_popup_handle: Handle<Image>,
+    pub bad_popup_handle: Handle<Image>,
+}
+
+fn setup_proc_tree_plugin(asset_server: Res<AssetServer>,
+                          mut proc_tree_system: ResMut<ProcTreeSystem>) {
+    proc_tree_system.good_popup_handle = asset_server.load("sprites/heart.png");
+    proc_tree_system.bad_popup_handle = asset_server.load("sprites/emote_broken_heart.png");
+}
 
 fn setup_proc_tree(mut commands: Commands,
                    asset_server: Res<AssetServer>,
@@ -81,19 +95,17 @@ fn handle_quest_events(
     mut quest_completed_events: EventReader<QuestCompletedEvent>,
     mut quest_missed_events: EventReader<QuestMissedEvent>,
     asset_server: Res<AssetServer>,
+    proc_tree_system: Res<ProcTreeSystem>
 ) {
-    let good_popup_handle = asset_server.load("sprites/heart.png");
-    let bad_popup_handle = asset_server.load("sprites/emote_broken_heart.png");
-
     let quest_completed = !quest_completed_events.is_empty();
     let quest_missed = !quest_missed_events.is_empty();
 
     if quest_completed {
-        spawn_popup(&mut commands, good_popup_handle.clone(), vec2(-50., 0.), 6.0);
-        spawn_popup(&mut commands, good_popup_handle.clone(), vec2(50., 60.), 6.0);
-        spawn_popup(&mut commands, good_popup_handle.clone(), vec2(30., -40.), 6.0);
+        spawn_popup(&mut commands, proc_tree_system.good_popup_handle.clone(), vec2(-50., 0.), 6.0);
+        spawn_popup(&mut commands, proc_tree_system.good_popup_handle.clone(), vec2(50., 60.), 6.0);
+        spawn_popup(&mut commands, proc_tree_system.good_popup_handle.clone(), vec2(30., -40.), 6.0);
     } else if quest_missed {
-        spawn_popup(&mut commands, bad_popup_handle, vec2(0., 0.), 1.0);
+        spawn_popup(&mut commands, proc_tree_system.bad_popup_handle.clone(), vec2(0., 0.), 1.0);
     }
 }
 
