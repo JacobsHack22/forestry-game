@@ -10,15 +10,19 @@ jobs:
           toolchain: nightly
           target: wasm32-unknown-unknown
 
+      - uses: actions/checkout@v2
+
+      - run: rustup toolchain install nightly --profile minimal
+
+      - uses: jetli/trunk-action@v0.1.0
+
+      - uses: jetli/wasm-bindgen-action@v0.1.0
+
       - uses: Swatinem/rust-cache@v2.2.0
         with:
           cache-on-failure: "true"
-          key: ${{ runner.os }}-rust-cache-v2
+          key: ${{ runner.os }}-rust-cache-v3
 
-      - uses: jetli/trunk-action@v0.1.0
-      - uses: jetli/wasm-bindgen-action@v0.1.0
-
-      - uses: actions/checkout@v2
 
       - run: trunk build --release --public-url forestry-game
 
