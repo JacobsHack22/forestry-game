@@ -20,26 +20,6 @@ impl Plugin for ProcTreePlugin {
     }
 }
 
-// fn setup_proc_tree(mut commands: Commands,
-//                    asset_server: Res<AssetServer>,
-//                    mut meshes: ResMut<Assets<Mesh>>,
-//                    mut materials: ResMut<Assets<CustomMaterial>>,
-//                    mut texture_atlases: ResMut<Assets<TextureAtlas>>) {
-//     let texture_handle = asset_server.load("sprites/48x48_trees.png");
-//     let texture_atlas = TextureAtlas::from_grid(texture_handle, Vec2::new(48.0, 48.0), 4, 1);
-//     let texture_atlas_handle = texture_atlases.add(texture_atlas);
-//     commands.spawn().insert_bundle(MaterialMesh2dBundle {
-//         mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
-//         transform: Transform::from_scale(Vec3::splat(400.0)),
-//         material: materials.add(CustomMaterial {
-//             color: Color::RED,
-//             color_texture: Some(asset_server.load("sprites/48x48_trees.png")),
-//             alpha_mode: AlphaMode::Blend,
-//         }),
-//         ..default()
-//     });
-// }
-
 #[derive(Component)]
 struct ProcTree;
 
