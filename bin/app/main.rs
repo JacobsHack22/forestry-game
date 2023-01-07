@@ -2,7 +2,6 @@
 //! interaction state.
 
 use bevy::prelude::*;
-use bevy::render::texture::ImageSettings;
 use bevy_easings::EasingsPlugin;
 use game::data::DataPlugin;
 use game::home::HomePlugin;
@@ -12,20 +11,25 @@ fn main() {
     console_error_panic_hook::set_once();
 
     App::new()
-        .insert_resource(ImageSettings::default_nearest())
         // .insert_resource(ClearColor(Color::rgb(52.0 / 255.0, 59.0 / 255.0, 153.0 / 255.0)))
         .insert_resource(ClearColor(Color::rgb(
-            156.0 / 255.0,
-            181.0 / 255.0,
-            218.0 / 255.0,
+            156. / 255.,
+            181. / 255.,
+            218. / 255.,
         )))
-        .insert_resource(WindowDescriptor {
-            width: 375.,
-            height: 812.,
-            fit_canvas_to_parent: true,
-            ..Default::default()
-        })
-        .add_plugins(DefaultPlugins)
+        .add_plugins(
+            DefaultPlugins
+                .set(WindowPlugin {
+                    window: WindowDescriptor {
+                        width: 375.,
+                        height: 812.,
+                        fit_canvas_to_parent: true,
+                        ..Default::default()
+                    },
+                    ..default()
+                })
+                .set(ImagePlugin::default_nearest()),
+        )
         .add_plugin(EasingsPlugin)
         .add_startup_system(setup)
         .add_plugin(DataPlugin)
@@ -34,5 +38,5 @@ fn main() {
 }
 
 fn setup(mut commands: Commands) {
-    commands.spawn_bundle(Camera2dBundle::default());
+    commands.spawn(Camera2dBundle::default());
 }

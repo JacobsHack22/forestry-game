@@ -2,17 +2,13 @@ use crate::data::{CurrentTree, Health, QuestCompletedEvent, QuestMissedEvent, Tr
 use bevy::app::{App, Plugin};
 use bevy::math::{vec2, vec3};
 use bevy::prelude::*;
-use bevy::reflect::TypeUuid;
-use bevy::render::render_resource::{AsBindGroup, ShaderRef};
-use bevy::sprite::{Material2d, Material2dPlugin};
 use bevy_easings::{Ease, EaseFunction, EasingType};
 
 pub struct ProcTreePlugin;
 
 impl Plugin for ProcTreePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(Material2dPlugin::<CustomMaterial>::default())
-            .insert_resource(ProcTreeSystem::default())
+        app.insert_resource(ProcTreeSystem::default())
             .add_startup_system(setup_proc_tree)
             .add_startup_system(setup_proc_tree_plugin)
             .add_system(update_proc_tree)
@@ -23,7 +19,7 @@ impl Plugin for ProcTreePlugin {
 #[derive(Component)]
 struct ProcTree;
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 struct ProcTreeSystem {
     pub good_popup_handle: Handle<Image>,
     pub bad_popup_handle: Handle<Image>,
@@ -43,10 +39,11 @@ fn setup_proc_tree(
     mut texture_atlases: ResMut<Assets<TextureAtlas>>,
 ) {
     let texture_handle = asset_server.load("sprites/season-trees-spritesheet.png");
-    let texture_atlas = TextureAtlas::from_grid(texture_handle, Vec2::new(64.0, 64.0), 40, 1);
+    let texture_atlas =
+        TextureAtlas::from_grid(texture_handle, Vec2::new(64.0, 64.0), 40, 1, None, None);
     let texture_atlas_handle = texture_atlases.add(texture_atlas);
     commands
-        .spawn_bundle(SpriteSheetBundle {
+        .spawn(SpriteSheetBundle {
             texture_atlas: texture_atlas_handle,
             transform: Transform::from_scale(Vec3::splat(6.0)),
             ..default()
@@ -114,7 +111,7 @@ fn spawn_popup(
     scale: f32,
 ) {
     commands
-        .spawn_bundle(SpriteBundle {
+        .spawn(SpriteBundle {
             texture: popup_texture_handle,
             ..default()
         })
@@ -152,20 +149,4 @@ fn spawn_popup(
                 },
             ),
         );
-}
-
-#[derive(AsBindGroup, Clone, TypeUuid)]
-#[uuid = "4ee9c363-1124-4113-890e-199d81b00281"]
-pub struct CustomMaterial {
-    #[uniform(0)]
-    color: Color,
-    #[texture(1)]
-    #[sampler(2)]
-    color_texture: Option<Handle<Image>>,
-}
-
-impl Material2d for CustomMaterial {
-    fn fragment_shader() -> ShaderRef {
-        "shaders/proc_tree.wgsl".into()
-    }
 }

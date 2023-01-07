@@ -79,12 +79,12 @@ impl From<Quest> for ActiveQuest {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Resource, Clone, Default)]
 pub struct QuestPool {
     pub queue: VecDeque<Quest>,
 }
 
-#[derive(Default)]
+#[derive(Resource, Default)]
 pub struct CurrentQuestInfo {
     pub current_quest: Option<ActiveQuest>,
     pub last_quest_finished: DateTime<Utc>,
@@ -95,6 +95,7 @@ pub struct TreeItem {
     pub info: TreeInfo,
 }
 
+#[derive(Resource)]
 pub struct CurrentTree(pub Entity);
 
 pub struct QuestAppearedEvent;
@@ -121,7 +122,7 @@ impl Plugin for DataPlugin {
 }
 
 fn current_tree_setup(mut commands: Commands) {
-    let default_tree = commands.spawn_bundle(TreeItem::default()).id();
+    let default_tree = commands.spawn(TreeItem::default()).id();
 
     commands.insert_resource(CurrentTree(default_tree));
 }

@@ -143,11 +143,18 @@ fn setup_quest_panel(
 
     let tile_size = 8.0;
 
-    let panel_atlas =
-        TextureAtlas::from_grid(panel_texture_handle, vec2(tile_size, tile_size), 3, 3);
+    let panel_atlas = TextureAtlas::from_grid(
+        panel_texture_handle,
+        vec2(tile_size, tile_size),
+        3,
+        3,
+        None,
+        None,
+    );
     let panel_atlas_handle = texture_atlases.add(panel_atlas);
 
-    let button_atlas = TextureAtlas::from_grid(button_texture_handle, vec2(32.0, 16.0), 1, 2);
+    let button_atlas =
+        TextureAtlas::from_grid(button_texture_handle, vec2(32.0, 16.0), 1, 2, None, None);
     let button_atlas_handle = texture_atlases.add(button_atlas);
 
     let tiles_info = TiledPanel {
@@ -171,7 +178,7 @@ fn setup_quest_panel(
     let text_top_margin = tile_size * 0.4;
 
     commands
-        .spawn_bundle(TileMapBundle {
+        .spawn(TileMapBundle {
             texture_atlas: panel_atlas_handle,
             tilemap: generate_panel_tilemap(tiles_info),
             ..Default::default()
@@ -183,7 +190,7 @@ fn setup_quest_panel(
         .insert(Name::from("Panel"))
         .with_children(|parent| {
             parent
-                .spawn_bundle(Text2dBundle {
+                .spawn(Text2dBundle {
                     text: Text::from_section("Header", header_text_style.clone())
                         .with_alignment(TextAlignment::CENTER),
                     transform: Transform {
@@ -195,7 +202,7 @@ fn setup_quest_panel(
                 })
                 .insert(QuestHeader);
             parent
-                .spawn_bundle(Text2dBundle {
+                .spawn(Text2dBundle {
                     text: Text::from_section("Description", description_text_style.clone())
                         .with_alignment(TextAlignment::TOP_LEFT),
                     transform: Transform {
@@ -217,7 +224,7 @@ fn setup_quest_panel(
 
             let button_pos = vec3(0.0, -text_box_height + tile_size * 2.0, 1.0);
             parent
-                .spawn_bundle(SpriteSheetBundle {
+                .spawn(SpriteSheetBundle {
                     texture_atlas: button_atlas_handle,
                     transform: Transform::from_translation(button_pos),
                     ..default()
