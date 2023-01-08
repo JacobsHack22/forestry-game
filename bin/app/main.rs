@@ -21,12 +21,11 @@ fn main() {
             DefaultPlugins
                 .set(WindowPlugin {
                     window: WindowDescriptor {
-                        width: 375.,
-                        height: 812.,
-                        fit_canvas_to_parent: true,
+                        title: "UV Debug".to_string(),
+                        mode: WindowMode::Fullscreen,
                         ..Default::default()
                     },
-                    ..default()
+                    ..Default::default()
                 })
                 .set(ImagePlugin::default_nearest()),
         )
