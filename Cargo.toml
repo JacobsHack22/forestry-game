@@ -39,7 +39,15 @@ console_error_panic_hook = { version = "0.1.6", optional = true }
 wasm-bindgen-test = "0.3.13"
 trunk = "0.16.0"
 
-[profile.release]
+# Enable a small amount of optimization in debug mode
+[profile.dev]
+opt-level = 1
+
+# Enable high optimizations for dependencies (incl. Bevy), but not for our code:
+[profile.dev.package."*"]
+opt-level = 3
+
+[target.'cfg(target_arch = "wasm32")'.profile.release]
 # Tell `rustc` to optimize for small code size.
 opt-level = "s"
 
