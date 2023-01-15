@@ -13,6 +13,9 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
+      - name: Install linux-specific deps
+        run: sudo apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
