@@ -1,0 +1,28 @@
+[package]
+name = "app"
+version = "0.1.0"
+authors = ["SmnTin <smn.pankv@gmail.com>"]
+edition = "2021"
+
+[target.'cfg(target_arch = "wasm32")'.features]
+default = ["console_error_panic_hook"]
+
+[dependencies]
+wasm-bindgen = "0.2.63"
+bevy = { version = "0.9.1", default-features = true }
+bevy_easings = "0.9.0"
+game = { path = "../game" }
+
+# The `console_error_panic_hook` crate provides better debugging of panics by
+# logging them with `console.error`. This is great for development, but requires
+# all the `std::fmt` and `std::panicking` infrastructure, so isn't great for
+# code size when deploying.
+console_error_panic_hook = { version = "0.1.6", optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3.13"
+trunk = "0.16.0"
+
+[target.'cfg(target_arch = "wasm32")'.profile.release]
+# Tell `rustc` to optimize for small code size.
+opt-level = "s"

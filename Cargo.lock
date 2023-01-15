@@ -121,6 +121,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "216261ddc8289130e551ddcd5ce8a064710c0d064a4d2895c67151c92b5443f6"
 
 [[package]]
+name = "app"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_easings",
+ "console_error_panic_hook",
+ "game",
+ "trunk",
+ "wasm-bindgen",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1706,6 +1719,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bd4b30a6560bbd9b4620f4de34c3f14f60848e58a9b7216801afcb4c7b31c3c"
 
 [[package]]
+name = "editor"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_easings",
+ "game",
+]
+
+[[package]]
 name = "either"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1872,20 +1894,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
 
 [[package]]
-name = "forestry-game"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "bevy_easings",
- "bevy_ninepatch",
- "bevy_simple_tilemap",
- "chrono",
- "trunk",
- "wasm-bindgen",
- "wasm-bindgen-test",
-]
-
-[[package]]
 name = "form_urlencoded"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2023,6 +2031,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
 dependencies = [
  "byteorder",
+]
+
+[[package]]
+name = "game"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_easings",
+ "bevy_ninepatch",
+ "bevy_simple_tilemap",
+ "chrono",
 ]
 
 [[package]]

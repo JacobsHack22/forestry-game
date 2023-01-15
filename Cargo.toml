@@ -1,43 +1,10 @@
-[package]
-name = "forestry-game"
-version = "0.1.0"
-authors = ["SmnTin <smn.pankv@gmail.com>"]
-edition = "2021"
+[workspace]
 resolver = "2"
-default-run = "app"
-
-[target.'cfg(target_arch = "wasm32")'.features]
-default = ["console_error_panic_hook"]
-
-[dependencies]
-wasm-bindgen = "0.2.63"
-bevy = { version = "0.9.1", default-features = true }
-chrono = { version = "0.4", features = ["wasmbind"] }
-bevy_simple_tilemap = "0.10.0"
-bevy_ninepatch = "0.9.1"
-bevy_easings = "0.9.0"
-
-[lib]
-name = "game"
-path = "src/lib.rs"
-
-[[bin]]
-name = "editor"
-path = "bin/editor/main.rs"
-
-[[bin]]
-name = "app"
-path = "bin/app/main.rs"
-
-# The `console_error_panic_hook` crate provides better debugging of panics by
-# logging them with `console.error`. This is great for development, but requires
-# all the `std::fmt` and `std::panicking` infrastructure, so isn't great for
-# code size when deploying.
-console_error_panic_hook = { version = "0.1.6", optional = true }
-
-[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
-wasm-bindgen-test = "0.3.13"
-trunk = "0.16.0"
+members = [
+    "game",
+    "app",
+    "editor",
+]
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]
@@ -46,7 +13,3 @@ opt-level = 1
 # Enable high optimizations for dependencies (incl. Bevy), but not for our code:
 [profile.dev.package."*"]
 opt-level = 3
-
-[target.'cfg(target_arch = "wasm32")'.profile.release]
-# Tell `rustc` to optimize for small code size.
-opt-level = "s"

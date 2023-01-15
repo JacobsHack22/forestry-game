@@ -1,0 +1,12 @@
+[package]
+name = "game"
+version = "0.1.0"
+authors = ["SmnTin <smn.pankv@gmail.com>"]
+edition = "2021"
+
+[dependencies]
+bevy = { version = "0.9.1", default-features = true }
+chrono = { version = "0.4", features = ["wasmbind"] }
+bevy_simple_tilemap = "0.10.0"
+bevy_ninepatch = "0.9.1"
+bevy_easings = "0.9.0"
