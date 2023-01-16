@@ -26,7 +26,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2.2.0
         with:
           cache-on-failure: "true"
-          key: ${{ runner.os }}-rust-cache-v3
+          key: ${{ runner.os }}-rust-cache-all-v3
 
       - run: cargo build
 
