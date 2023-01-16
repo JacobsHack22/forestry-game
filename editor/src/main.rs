@@ -1,6 +1,7 @@
 use std::any::TypeId;
 
 use bevy::asset::{HandleId, ReflectAsset};
+use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
 use bevy::prelude::*;
 use bevy::reflect::{TypeRegistryArc, TypeRegistryInternal};
 use bevy::render::camera::Viewport;
@@ -13,6 +14,11 @@ use bevy_inspector_egui::bevy_inspector::{
 };
 use bevy_inspector_egui::DefaultInspectorConfigPlugin;
 use egui_dock::{NodeIndex, Tree};
+use smooth_bevy_cameras::controllers::orbit::*;
+use smooth_bevy_cameras::{LookTransform, LookTransformBundle, LookTransformPlugin, Smoother};
+
+use game::data::DataPlugin;
+use game::tree::TreePlugin;
 
 fn main() {
     App::new()
@@ -20,6 +26,10 @@ fn main() {
         .add_plugin(bevy_framepace::FramepacePlugin) // reduces input lag
         .add_plugin(DefaultInspectorConfigPlugin)
         .add_plugin(EguiPlugin)
+        .add_plugin(OrbitCameraPlugin {
+            override_input_system: true,
+        })
+        .add_plugin(LookTransformPlugin)
         .insert_resource(UiState::new())
         .add_system_to_stage(CoreStage::PreUpdate, show_ui_system.at_end())
         .add_startup_system(setup)
@@ -27,6 +37,8 @@ fn main() {
         .add_system(set_camera_viewport)
         .register_type::<Option<Handle<Image>>>()
         .register_type::<AlphaMode>()
+        .add_plugin(TreePlugin)
+        .add_plugin(DataPlugin)
         .run();
 }
 
@@ -142,10 +154,7 @@ impl egui_dock::TabViewer for TabViewer<'_> {
         let type_registry = type_registry.read();
 
         match window {
-            Window::GameView => {
-                (*self.viewport_rect, _) =
-                    ui.allocate_exact_size(ui.available_size(), egui::Sense::hover());
-            }
+            Window::GameView => setup_gameview_ui(ui, self.world, self.viewport_rect),
             Window::Resources => {
                 select_resource(ui, &type_registry, self.selection, self.selected_entities)
             }
@@ -194,6 +203,50 @@ impl egui_dock::TabViewer for TabViewer<'_> {
 
     fn clear_background(&self, window: &Self::Tab) -> bool {
         !matches!(window, Window::GameView)
+    }
+}
+
+fn setup_gameview_ui(ui: &mut egui::Ui, world: &mut World, viewport_rect: &mut egui::Rect) {
+    let response;
+    (*viewport_rect, response) =
+        ui.allocate_exact_size(ui.available_size(), egui::Sense::click_and_drag());
+
+    let mut controllers = world.query_filtered::<&OrbitCameraController, With<MainCamera>>();
+    if let Ok(&controller) = controllers.get_single(world) {
+        let mouse_wheel_events = world
+            .resource_mut::<Events<MouseWheel>>()
+            .drain()
+            .collect::<Vec<_>>();
+
+        let mut scroll_events = world.resource_mut::<Events<ControlEvent>>();
+
+        if response.dragged() {
+            let drag_delta = response.drag_delta();
+            let input = &ui.input().pointer;
+
+            if input.button_down(egui::PointerButton::Primary) {
+                scroll_events.send(ControlEvent::Orbit(
+                    controller.mouse_rotate_sensitivity * Vec2::new(drag_delta.x, drag_delta.y),
+                ));
+            } else if input.button_down(egui::PointerButton::Secondary) {
+                scroll_events.send(ControlEvent::TranslateTarget(
+                    controller.mouse_translate_sensitivity * Vec2::new(drag_delta.x, drag_delta.y),
+                ));
+            }
+        }
+
+        if response.hovered() {
+            for event in mouse_wheel_events {
+                let mut scalar = 1.0;
+                let scroll_amount = match event.unit {
+                    MouseScrollUnit::Line => event.y,
+                    MouseScrollUnit::Pixel => event.y / controller.pixels_per_line,
+                };
+                scalar *= 1.0 - scroll_amount * controller.mouse_wheel_zoom_sensitivity;
+
+                scroll_events.send(ControlEvent::Zoom(scalar));
+            }
+        }
     }
 }
 
@@ -286,124 +339,13 @@ fn setup_frame_limiter(mut settings: ResMut<bevy_framepace::FramepaceSettings>) 
     settings.limiter = Limiter::from_framerate(60.0);
 }
 
-fn setup(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
-    let box_size = 2.0;
-    let box_thickness = 0.15;
-    let box_offset = (box_size + box_thickness) / 2.0;
-
-    // left - red
-    let mut transform = Transform::from_xyz(-box_offset, box_offset, 0.0);
-    transform.rotate(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2));
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Box::new(
-            box_size,
-            box_thickness,
-            box_size,
-        ))),
-        transform,
-        material: materials.add(StandardMaterial {
-            base_color: Color::rgb(0.63, 0.065, 0.05),
-            ..Default::default()
-        }),
-        ..Default::default()
-    });
-    // right - green
-    let mut transform = Transform::from_xyz(box_offset, box_offset, 0.0);
-    transform.rotate(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2));
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Box::new(
-            box_size,
-            box_thickness,
-            box_size,
-        ))),
-        transform,
-        material: materials.add(StandardMaterial {
-            base_color: Color::rgb(0.14, 0.45, 0.091),
-            ..Default::default()
-        }),
-        ..Default::default()
-    });
-    // bottom - white
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Box::new(
-            box_size + 2.0 * box_thickness,
-            box_thickness,
-            box_size,
-        ))),
-        material: materials.add(StandardMaterial {
-            base_color: Color::rgb(0.725, 0.71, 0.68),
-            ..Default::default()
-        }),
-        ..Default::default()
-    });
-    // top - white
-    let transform = Transform::from_xyz(0.0, 2.0 * box_offset, 0.0);
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Box::new(
-            box_size + 2.0 * box_thickness,
-            box_thickness,
-            box_size,
-        ))),
-        transform,
-        material: materials.add(StandardMaterial {
-            base_color: Color::rgb(0.725, 0.71, 0.68),
-            ..Default::default()
-        }),
-        ..Default::default()
-    });
-    // back - white
-    let mut transform = Transform::from_xyz(0.0, box_offset, -box_offset);
-    transform.rotate(Quat::from_rotation_x(std::f32::consts::FRAC_PI_2));
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Box::new(
-            box_size + 2.0 * box_thickness,
-            box_thickness,
-            box_size + 2.0 * box_thickness,
-        ))),
-        transform,
-        material: materials.add(StandardMaterial {
-            base_color: Color::rgb(0.725, 0.71, 0.68),
-            ..Default::default()
-        }),
-        ..Default::default()
-    });
-
+fn setup(mut commands: Commands) {
     // ambient light
     commands.insert_resource(AmbientLight {
         color: Color::WHITE,
         brightness: 0.02,
     });
-    // top light
-    commands
-        .spawn(PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Plane { size: 0.4 })),
-            transform: Transform::from_matrix(Mat4::from_scale_rotation_translation(
-                Vec3::ONE,
-                Quat::from_rotation_x(std::f32::consts::PI),
-                Vec3::new(0.0, box_size + 0.5 * box_thickness, 0.0),
-            )),
-            material: materials.add(StandardMaterial {
-                base_color: Color::WHITE,
-                emissive: Color::WHITE * 100.0,
-                ..Default::default()
-            }),
-            ..Default::default()
-        })
-        .with_children(|builder| {
-            builder.spawn(PointLightBundle {
-                point_light: PointLight {
-                    color: Color::WHITE,
-                    intensity: 25.0,
-                    ..Default::default()
-                },
-                transform: Transform::from_translation((box_thickness + 0.05) * Vec3::Y),
-                ..Default::default()
-            });
-        });
+
     // directional light
     const HALF_SIZE: f32 = 10.0;
     commands.spawn(DirectionalLightBundle {
@@ -424,12 +366,26 @@ fn setup(
         ..Default::default()
     });
 
+    let orbit_camera_controller = OrbitCameraController {
+        smoothing_weight: 0.1,
+        mouse_rotate_sensitivity: Vec2::splat(0.3),
+        mouse_translate_sensitivity: Vec2::splat(0.3),
+        ..Default::default()
+    };
     // camera
     commands.spawn((
-        Camera3dBundle {
-            transform: Transform::from_xyz(0.0, box_offset, 4.0)
-                .looking_at(Vec3::new(0.0, box_offset, 0.0), Vec3::Y),
-            ..Default::default()
+        Camera3dBundle::default(),
+        orbit_camera_controller,
+        LookTransformBundle {
+            transform: LookTransform::new(
+                Vec3 {
+                    x: 0.0,
+                    y: 7.0,
+                    z: 10.0,
+                },
+                Vec3::ZERO,
+            ),
+            smoother: Smoother::new(orbit_camera_controller.smoothing_weight),
         },
         MainCamera,
     ));
