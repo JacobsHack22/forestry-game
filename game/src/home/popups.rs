@@ -1,76 +1,35 @@
-use crate::data::{CurrentTree, Health, QuestCompletedEvent, QuestMissedEvent, TreeInfo};
+use crate::data::{QuestCompletedEvent, QuestMissedEvent};
 use bevy::app::{App, Plugin};
 use bevy::math::{vec2, vec3};
 use bevy::prelude::*;
 use bevy_easings::{Ease, EaseFunction, EasingType};
 
-pub struct ProcTreePlugin;
+pub struct PopupsPlugin;
 
-impl Plugin for ProcTreePlugin {
+impl Plugin for PopupsPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(ProcTreeSystem::default())
-            .add_startup_system(setup_proc_tree)
-            .add_startup_system(setup_proc_tree_plugin)
-            .add_system(update_proc_tree)
+        app.insert_resource(PopupsPluginData::default())
+            .add_startup_system(setup_popups)
             .add_system(handle_quest_events);
     }
 }
 
-#[derive(Component)]
-struct ProcTree;
-
 #[derive(Default, Resource)]
-struct ProcTreeSystem {
+struct PopupsPluginData {
     pub good_popup_handle: Handle<Image>,
     pub bad_popup_handle: Handle<Image>,
 }
 
-fn setup_proc_tree_plugin(
-    asset_server: Res<AssetServer>,
-    mut proc_tree_system: ResMut<ProcTreeSystem>,
-) {
+fn setup_popups(asset_server: Res<AssetServer>, mut proc_tree_system: ResMut<PopupsPluginData>) {
     proc_tree_system.good_popup_handle = asset_server.load("sprites/heart.png");
     proc_tree_system.bad_popup_handle = asset_server.load("sprites/emote_broken_heart.png");
-}
-
-fn setup_proc_tree(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut texture_atlases: ResMut<Assets<TextureAtlas>>,
-) {
-    let texture_handle = asset_server.load("sprites/season-trees-spritesheet.png");
-    let texture_atlas =
-        TextureAtlas::from_grid(texture_handle, Vec2::new(64.0, 64.0), 40, 1, None, None);
-    let texture_atlas_handle = texture_atlases.add(texture_atlas);
-    commands
-        .spawn(SpriteSheetBundle {
-            texture_atlas: texture_atlas_handle,
-            transform: Transform::from_scale(Vec3::splat(6.0)),
-            ..default()
-        })
-        .insert(ProcTree);
-}
-
-fn update_proc_tree(
-    mut proc_trees: Query<&mut TextureAtlasSprite, With<ProcTree>>,
-    current_tree: Res<CurrentTree>,
-    trees_info: Query<&TreeInfo>,
-) {
-    let current_tree = trees_info.get(current_tree.0).unwrap();
-    for mut tree_sprite in proc_trees.iter_mut() {
-        tree_sprite.index = match current_tree.health {
-            Health::Good => 0,
-            Health::Moderate => 24,
-            Health::Bad => 32,
-        }
-    }
 }
 
 fn handle_quest_events(
     mut commands: Commands,
     quest_completed_events: EventReader<QuestCompletedEvent>,
     quest_missed_events: EventReader<QuestMissedEvent>,
-    proc_tree_system: Res<ProcTreeSystem>,
+    proc_tree_system: Res<PopupsPluginData>,
 ) {
     let quest_completed = !quest_completed_events.is_empty();
     let quest_missed = !quest_missed_events.is_empty();
