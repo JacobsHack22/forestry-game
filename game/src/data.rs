@@ -3,12 +3,13 @@ use bevy::prelude::*;
 use chrono::{DateTime, Duration, Local, Utc};
 use std::collections::VecDeque;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TreeKind {
     Birch,
     Oak,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Health {
     Bad,
     Moderate,
@@ -38,7 +39,7 @@ impl Health {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct TreeInfo {
     pub name: String,
     pub seed: u64,

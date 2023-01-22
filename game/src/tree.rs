@@ -1,13 +1,19 @@
-use crate::data::{CurrentTree, Health, TreeInfo};
+use crate::data::{CurrentTree, TreeInfo};
 use bevy::app::{App, Plugin};
 use bevy::prelude::*;
+use bevy_prototype_debug_lines::*;
+
+mod gen;
+
 pub struct TreePlugin;
 
 impl Plugin for TreePlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(TreePluginData::default())
+            .add_plugin(DebugLinesPlugin::default())
             .add_startup_system(setup_tree)
-            .add_system(update_tree);
+            .add_system(update_tree_structure)
+            .add_system(draw_trees);
     }
 }
 
@@ -15,34 +21,55 @@ impl Plugin for TreePlugin {
 struct Tree;
 
 #[derive(Default, Resource)]
-struct TreePluginData {}
+struct TreePluginData {
+    tree_structure: gen::TreeStructure,
+}
 
-fn setup_tree(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
-) {
+fn setup_tree(mut commands: Commands) {
     commands
-        .spawn(PbrBundle {
-            mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
-            material: materials.add(Color::rgb(0.8, 0.7, 0.6).into()),
-            transform: Transform::from_xyz(0.0, 0.5, 0.0),
-            ..default()
-        })
+        .spawn(Transform::from_xyz(0.0, 0.0, 0.0))
         .insert(Tree);
 }
 
-fn update_tree(
-    mut proc_trees: Query<&mut TextureAtlasSprite, With<Tree>>,
+impl From<TreeInfo> for gen::SeedStructure {
+    fn from(tree_info: TreeInfo) -> Self {
+        gen::SeedStructure {
+            seed: tree_info.seed,
+            iterations_count: 5,
+            ..default()
+        }
+    }
+}
+
+fn update_tree_structure(
+    mut data: ResMut<TreePluginData>,
     current_tree: Res<CurrentTree>,
-    trees_info: Query<&TreeInfo>,
+    trees_info: Query<(&TreeInfo, ChangeTrackers<TreeInfo>)>,
 ) {
-    let current_tree = trees_info.get(current_tree.0).unwrap();
-    for mut tree_sprite in proc_trees.iter_mut() {
-        tree_sprite.index = match current_tree.health {
-            Health::Good => 0,
-            Health::Moderate => 24,
-            Health::Bad => 32,
+    let (current_tree_info, change_trackers) = trees_info.get(current_tree.0).unwrap();
+    if change_trackers.is_changed() || current_tree.is_changed() {
+        data.tree_structure = gen::generate(current_tree_info.clone().into());
+    }
+}
+
+fn draw_trees(
+    data: ResMut<TreePluginData>,
+    tree_transforms: Query<&Transform, With<Tree>>,
+    mut lines: ResMut<DebugLines>,
+) {
+    for transform in tree_transforms.iter() {
+        draw_tree(&data.tree_structure.root, *transform, &mut lines);
+    }
+}
+
+fn draw_tree(node: &gen::TreeNode, transform: Transform, lines: &mut DebugLines) {
+    let children = [node.main_branch.as_deref(), node.lateral_branch.as_deref()];
+    for child in children.iter() {
+        if let Some(child) = child {
+            let current_pos = transform.transform_point(node.global_position);
+            let child_pos = transform.transform_point(child.global_position);
+            lines.line(current_pos, child_pos, 0.0);
+            draw_tree(child, transform, lines);
         }
     }
 }
