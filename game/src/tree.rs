@@ -31,15 +31,6 @@ fn setup_tree(mut commands: Commands) {
         .insert(Tree);
 }
 
-impl From<TreeInfo> for gen::SeedStructure {
-    fn from(tree_info: TreeInfo) -> Self {
-        gen::SeedStructure {
-            seed: tree_info.seed,
-            iterations_count: 5,
-            ..default()
-        }
-    }
-}
 
 fn update_tree_structure(
     mut data: ResMut<TreePluginData>,
@@ -48,7 +39,7 @@ fn update_tree_structure(
 ) {
     let (current_tree_info, change_trackers) = trees_info.get(current_tree.0).unwrap();
     if change_trackers.is_changed() || current_tree.is_changed() {
-        data.tree_structure = gen::generate(current_tree_info.clone().into());
+        data.tree_structure = gen::generate(current_tree_info.clone());
     }
 }
 
