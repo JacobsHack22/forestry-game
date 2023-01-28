@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, cmp::max};
 
 use bevy::prelude::*;
 use rand::{RngCore, SeedableRng, Rng, rngs::StdRng, seq::SliceRandom};
@@ -21,8 +21,9 @@ struct SeedStructure {
     pub resource_coef: f32,
     pub full_light_exposure: f32,
     pub base_branch_width: f32,
+    pub shadow_volume_angle: f32,
     pub shadow_adjustment_coef: f32,
-    pub shadow_adjustmeny_base: f32,
+    pub shadow_adjustment_base: f32,
 
     pub tropism_weight: f32,
     pub current_direction_weight: f32,
@@ -208,14 +209,14 @@ pub fn find_candidates_for_environment_point(node: &Box<MetamerNode>, associated
 }
 
 pub fn calculate_optimal_growth_direction(bud_info: &mut Vec<BudLocalEnvironment>, environment: &Environment, root: &Box<MetamerNode>, rng: &mut StdRng,
-                                                                        perception_angle: f32, perception_distance_coef: f32, internode_length: f32) { 
+                                                                        perception_angle: f32, perception_distance_coef: f32) { 
     let mut associated_sets: Vec<Vec<Vec3>> = vec![vec![]; environment.get_number_of_buds()];
 
     for environment_point in &environment.points {
         let mut associated_bud_candidates: Vec<BudId> = vec![];
         let mut current_minimal_distance = f32::MAX;
         find_candidates_for_environment_point(root, &mut associated_bud_candidates, &mut current_minimal_distance, environment_point, 
-                                                                    perception_angle, perception_distance_coef, internode_length );
+                                                                    perception_angle, perception_distance_coef, 0.0);
 
         let associated_bud = associated_bud_candidates.choose(rng);
 
@@ -229,9 +230,64 @@ pub fn calculate_optimal_growth_direction(bud_info: &mut Vec<BudLocalEnvironment
     }
 }
 
+pub fn calculate_shadow_exposure_for_one_node(bud_info: &mut Vec<BudLocalEnvironment>, exposure_node: &Box<MetamerNode>, node: &Box<MetamerNode>,
+                                                shadow_volume_angle: f32, shadow_adjustment_coef: f32, shadow_adjustment_base: f32) {
+    for bud in [&node.main_bud, &node.axillary_bud] {
+        match bud.fate {
+            BudFate::Dormant => {
+                if (Vec3::new(0.0, 0.0, -1.0).angle_between(node.global_position.clone() - exposure_node.global_position.clone()) <= shadow_volume_angle) {
+                    let bud_id = bud.id.0;
+                    bud_info[bud_id].light_exposure -= shadow_adjustment_coef * (shadow_adjustment_base).powf(-node.distance_to(&exposure_node.global_position));
+                    if bud_info[bud_id].light_exposure < 0.0 {
+                        bud_info[bud_id].light_exposure = 0.0;
+                    }
+                }
+            }
+            BudFate::Shoot => {
+                if (Vec3::new(0.0, 0.0, -1.0).angle_between(node.global_position.clone() - exposure_node.global_position.clone()) <= shadow_volume_angle) {
+                    let bud_id = bud.id.0;
+                    bud_info[bud_id].light_exposure -= shadow_adjustment_coef * (shadow_adjustment_base).powf(-node.distance_to(&exposure_node.global_position));
+                    if bud_info[bud_id].light_exposure < 0.0 {
+                        bud_info[bud_id].light_exposure = 0.0;
+                    }
+                    calculate_shadow_exposure_for_one_node(bud_info, exposure_node, bud.branch_node.as_ref().expect("Shoot should have branch node"),
+                                                                                    shadow_volume_angle, shadow_adjustment_coef, shadow_adjustment_base);
+                }
+            }
+            _ => (),
+        }
+    }
+}
+
+pub fn calculate_shadow_exposure(bud_info: &mut Vec<BudLocalEnvironment>, node: &Box<MetamerNode>, root: &Box<MetamerNode>,
+                                                    shadow_volume_angle: f32, shadow_adjustment_coef: f32, shadow_adjustment_base: f32) {
+    calculate_shadow_exposure_for_one_node(bud_info, node, root, 
+                                    shadow_volume_angle, shadow_adjustment_coef, shadow_adjustment_base);
+    for bud in [&node.main_bud, &node.axillary_bud] {
+        match bud.fate {
+            BudFate::Shoot => {
+                calculate_shadow_exposure(bud_info, bud.branch_node.as_ref().expect("Shoot should have branch node"), root,
+                                                    shadow_volume_angle, shadow_adjustment_coef, shadow_adjustment_base);
+            }
+            _ => (),
+        }
+    }
+}
+
+pub fn calculate_light_exposure(bud_info: &mut Vec<BudLocalEnvironment>, root: &Box<MetamerNode>, full_light_exposure: f32,
+                                                                        shadow_volume_angle: f32, shadow_adjustment_coef: f32, shadow_adjustment_base: f32) {
+    for bud in bud_info.iter_mut() {
+        bud.light_exposure = full_light_exposure + shadow_adjustment_coef;
+    }
+    calculate_shadow_exposure(bud_info, root, root,
+                        shadow_volume_angle, shadow_adjustment_coef, shadow_adjustment_base)
+}
+
 pub fn calculate_local_environment(bud_info: &mut Vec<BudLocalEnvironment>, environment: &Environment, root: &Box<MetamerNode>, rng: &mut StdRng,
-                                                                        perception_angle: f32, perception_distance_coef: f32, internode_length: f32) {
-    calculate_optimal_growth_direction(bud_info, environment, root, rng, perception_angle, perception_distance_coef, internode_length);
+                                                                        perception_angle: f32, perception_distance_coef: f32, full_light_exposure: f32,
+                                                                        shadow_volume_angle: f32, shadow_adjustment_coef: f32, shadow_adjustment_base: f32) {
+    calculate_optimal_growth_direction(bud_info, environment, root, rng, perception_angle, perception_distance_coef);
+    calculate_light_exposure(bud_info, root, full_light_exposure, shadow_volume_angle, shadow_adjustment_coef, shadow_adjustment_base);
 }
 
 pub fn generate(tree_info: TreeInfo) -> TreeStructure {
@@ -245,7 +301,7 @@ pub fn generate(tree_info: TreeInfo) -> TreeStructure {
         width: args.base_branch_width,
         main_bud: Box::new(Bud {
             direction: Vec3::new(0.0, 1.0, 0.0),
-            id: environment.bud_id_counter,
+            id: environment.get_next_bud_id(),
             branch_node: None,
             fate: BudFate::Dormant,
         }),
@@ -261,7 +317,9 @@ pub fn generate(tree_info: TreeInfo) -> TreeStructure {
         let mut bud_info: Vec<BudLocalEnvironment> = vec![BudLocalEnvironment::default(); environment.get_number_of_buds()];
 
         environment.clear_occupancy_zones(&root, args.occupancy_radius_coef);
-        calculate_local_environment(&mut bud_info, &environment, &root, &mut rng, args.bud_perception_angle, args.bud_perception_distance_coef, 0.0);
+        calculate_local_environment(&mut bud_info, &environment, &root, &mut rng, 
+            args.bud_perception_angle, args.bud_perception_distance_coef,  args.full_light_exposure,
+            args.shadow_volume_angle, args.shadow_adjustment_coef, args.shadow_adjustment_base);    
     }
 
     TreeStructure { root: TreeNode::from(root) }
