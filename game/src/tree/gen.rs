@@ -1,3 +1,5 @@
+use std::env;
+
 use bevy::prelude::*;
 use rand::{RngCore, SeedableRng, Rng, rngs::StdRng, seq::SliceRandom};
 
@@ -19,6 +21,8 @@ struct SeedStructure {
     pub resource_coef: f32,
     pub full_light_exposure: f32,
     pub base_branch_width: f32,
+    pub shadow_adjustment_coef: f32,
+    pub shadow_adjustmeny_base: f32,
 
     pub tropism_weight: f32,
     pub current_direction_weight: f32,
@@ -70,9 +74,9 @@ impl Default for BudFate {
 #[derive(Default, Debug)]
 pub struct Bud {
     pub direction: Vec3,
-    pub bud_id: BudId,
+    pub id: BudId,
     pub branch_node: Option<Box<MetamerNode>>,
-    pub bud_fate: BudFate,
+    pub fate: BudFate,
 }
 
 #[derive(Default, Debug)]
@@ -85,9 +89,7 @@ pub struct MetamerNode {
 
 impl MetamerNode {
     pub fn distance_to(&self, environment_point: &Vec3) -> f32 {
-        f32::sqrt( (self.global_position.x - environment_point.x).powi(2) + 
-                    (self.global_position.y - environment_point.y).powi(2) +
-                    (self.global_position.z - environment_point.z).powi(2) )
+        self.global_position.distance(environment_point.clone())
     }
 }
 
@@ -117,6 +119,25 @@ pub struct Environment {
     pub bud_id_counter: BudId,
 }
 
+pub fn is_in_occupancy_zone(point: &Vec3, node: &MetamerNode, occupancy_radius_coef: f32, internode_length: f32) -> bool {
+    if node.distance_to(point) <= occupancy_radius_coef * internode_length {
+        return true;
+    }
+    for bud in [&node.main_bud, &node.axillary_bud] {
+        match bud.fate {
+            BudFate::Dormant => {
+                if let Some(branch) = &bud.branch_node {
+                    if is_in_occupancy_zone(point, branch, occupancy_radius_coef, node.distance_to(&branch.global_position)) {
+                        return true;
+                    }
+                }
+            },
+            _ => {}
+        }
+    }
+    false
+}
+
 impl Environment {
     pub fn get_next_bud_id(&mut self) -> BudId {
         let tmp = self.bud_id_counter;
@@ -127,6 +148,15 @@ impl Environment {
     pub fn get_number_of_buds(&self) -> usize {
         self.bud_id_counter.0
     }
+
+    pub fn clear_occupancy_zones(&mut self, root : &MetamerNode, occupancy_radius_coef: f32) {
+        self.points = self.points.iter().filter(|&point| !is_in_occupancy_zone(point, root, occupancy_radius_coef, 0.0)).cloned().collect()
+    }
+}
+
+pub fn is_in_perception_volume(point: &Vec3, bud_position: &Vec3, bud_direction: &Vec3, perception_angle: f32, perception_radius: f32) -> bool {
+    point.distance(bud_position.clone()) <= perception_radius &&
+        (point.clone() - bud_position.clone()).angle_between(bud_direction.clone()) <= perception_angle
 }
 
 pub fn generate_environment(seed: u64, environment_size: u64, environment_points_count: u32) -> Environment {
@@ -151,35 +181,41 @@ pub struct BudLocalEnvironment {
     pub light_exposure: f32,
 }
 
-pub fn find_candidates_for_environment_point(node: &Box<MetamerNode>, associated_bud_candidates: &mut Vec<BudId>, current_minimal_distance: &mut f32, environment_point: &Vec3) {
+pub fn find_candidates_for_environment_point(node: &Box<MetamerNode>, associated_bud_candidates: &mut Vec<BudId>, current_minimal_distance: &mut f32, environment_point: &Vec3,
+                                                                        perception_angle: f32, perception_distance_coef: f32, internode_length: f32) {
     for bud in [&node.main_bud, &node.axillary_bud] {
-        match bud.bud_fate {
+        match bud.fate {
             BudFate::Dormant => {
-                let distance = node.distance_to(environment_point);
-                if associated_bud_candidates.is_empty() || distance < *current_minimal_distance {
-                    *current_minimal_distance = distance;
-                    associated_bud_candidates.clear();
-                    associated_bud_candidates.push(bud.bud_id);
-                } else if distance == *current_minimal_distance {
-                    associated_bud_candidates.push(bud.bud_id);
+                if is_in_perception_volume(environment_point, &node.global_position, &bud.direction, perception_angle, perception_distance_coef * internode_length) {
+                    let distance = node.distance_to(environment_point);
+                    if associated_bud_candidates.is_empty() || distance < *current_minimal_distance {
+                        *current_minimal_distance = distance;
+                        associated_bud_candidates.clear();
+                        associated_bud_candidates.push(bud.id);
+                    } else if distance == *current_minimal_distance {
+                        associated_bud_candidates.push(bud.id);
+                    }
                 }
             },
             BudFate::Shoot => {
                 find_candidates_for_environment_point(bud.branch_node.as_ref().expect("Shoot should have branch node"),
-                 associated_bud_candidates, current_minimal_distance, environment_point)
+                 associated_bud_candidates, current_minimal_distance, environment_point,
+                 perception_angle, perception_distance_coef, node.distance_to(&bud.branch_node.as_ref().unwrap().global_position))
             }
             _ => (),
         }
     }
 }
 
-pub fn calculate_optimal_growth_direction(bud_info: &mut Vec<BudLocalEnvironment>, environment: &Environment, root: &Box<MetamerNode>, rng: &mut StdRng) {
+pub fn calculate_optimal_growth_direction(bud_info: &mut Vec<BudLocalEnvironment>, environment: &Environment, root: &Box<MetamerNode>, rng: &mut StdRng,
+                                                                        perception_angle: f32, perception_distance_coef: f32, internode_length: f32) { 
     let mut associated_sets: Vec<Vec<Vec3>> = vec![vec![]; environment.get_number_of_buds()];
 
     for environment_point in &environment.points {
         let mut associated_bud_candidates: Vec<BudId> = vec![];
         let mut current_minimal_distance = f32::MAX;
-        find_candidates_for_environment_point(root, &mut associated_bud_candidates, &mut current_minimal_distance, environment_point);
+        find_candidates_for_environment_point(root, &mut associated_bud_candidates, &mut current_minimal_distance, environment_point, 
+                                                                    perception_angle, perception_distance_coef, internode_length );
 
         let associated_bud = associated_bud_candidates.choose(rng);
 
@@ -193,8 +229,9 @@ pub fn calculate_optimal_growth_direction(bud_info: &mut Vec<BudLocalEnvironment
     }
 }
 
-pub fn calculate_local_environment(bud_info: &mut Vec<BudLocalEnvironment>, environment: &Environment, root: &Box<MetamerNode>, rng: &mut StdRng) {
-    calculate_optimal_growth_direction(bud_info, environment, root, rng);
+pub fn calculate_local_environment(bud_info: &mut Vec<BudLocalEnvironment>, environment: &Environment, root: &Box<MetamerNode>, rng: &mut StdRng,
+                                                                        perception_angle: f32, perception_distance_coef: f32, internode_length: f32) {
+    calculate_optimal_growth_direction(bud_info, environment, root, rng, perception_angle, perception_distance_coef, internode_length);
 }
 
 pub fn generate(tree_info: TreeInfo) -> TreeStructure {
@@ -208,22 +245,23 @@ pub fn generate(tree_info: TreeInfo) -> TreeStructure {
         width: args.base_branch_width,
         main_bud: Box::new(Bud {
             direction: Vec3::new(0.0, 1.0, 0.0),
-            bud_id: environment.bud_id_counter,
+            id: environment.bud_id_counter,
             branch_node: None,
-            bud_fate: BudFate::Dormant,
+            fate: BudFate::Dormant,
         }),
         axillary_bud: Box::new(Bud {
             direction: Vec3::ZERO,
-            bud_id: BudId(0),
+            id: BudId(0),
             branch_node: None,
-            bud_fate: BudFate::Dead,
+            fate: BudFate::Dead,
         })
     });
 
     for _ in 0..args.iterations_count {
-       let mut bud_info: Vec<BudLocalEnvironment> = vec![BudLocalEnvironment::default(); environment.get_number_of_buds()];
+        let mut bud_info: Vec<BudLocalEnvironment> = vec![BudLocalEnvironment::default(); environment.get_number_of_buds()];
 
-       calculate_local_environment(&mut bud_info, &environment, &root, &mut rng);
+        environment.clear_occupancy_zones(&root, args.occupancy_radius_coef);
+        calculate_local_environment(&mut bud_info, &environment, &root, &mut rng, args.bud_perception_angle, args.bud_perception_distance_coef, 0.0);
     }
 
     TreeStructure { root: TreeNode::from(root) }
