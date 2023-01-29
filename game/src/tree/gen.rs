@@ -283,11 +283,45 @@ pub fn calculate_light_exposure(bud_info: &mut Vec<BudLocalEnvironment>, root: &
                         shadow_volume_angle, shadow_adjustment_coef, shadow_adjustment_base)
 }
 
+pub fn calculate_resource_for_each_bud(bud_info: &mut Vec<BudLocalEnvironment>, node: &Box<MetamerNode>, resource: f32, apical_dominance: f32) {
+    let denominator = apical_dominance * bud_info[node.main_bud.id.0].light_exposure + (1.0 - apical_dominance) * bud_info[node.axillary_bud.id.0].light_exposure;; 
+
+    match node.main_bud.fate {
+        BudFate::Shoot => {
+            bud_info[node.main_bud.id.0].resource = resource * apical_dominance * bud_info[node.main_bud.id.0].light_exposure / denominator;
+            calculate_resource_for_each_bud(bud_info, node.main_bud.branch_node.as_ref().expect("Shoot should have branch node"), bud_info[node.main_bud.id.0].resource, apical_dominance);
+        }
+        BudFate::Dormant => {
+            bud_info[node.main_bud.id.0].resource = resource * apical_dominance * bud_info[node.main_bud.id.0].light_exposure / denominator;
+        }
+        _ => (),
+    }
+
+    match node.axillary_bud.fate {
+        BudFate::Shoot => {
+            bud_info[node.axillary_bud.id.0].resource = resource * (1.0 - apical_dominance) * bud_info[node.axillary_bud.id.0].light_exposure / denominator;
+            calculate_resource_for_each_bud(bud_info, node.axillary_bud.branch_node.as_ref().expect("Shoot should have branch node"), bud_info[node.axillary_bud.id.0].resource, apical_dominance);
+        }
+        BudFate::Dormant => {
+            bud_info[node.axillary_bud.id.0].resource = resource * (1.0 - apical_dominance) * bud_info[node.axillary_bud.id.0].light_exposure / denominator;
+        }
+        _ => (),
+    }
+}
+
+pub fn calculate_resources(bud_info: &mut Vec<BudLocalEnvironment>, root: &Box<MetamerNode>, resource_coef: f32, bud_light_sensitivity: f32, apical_dominance: f32) {
+    let current_resource = resource_coef * bud_info[root.main_bud.id.0].light_exposure.powf(bud_light_sensitivity);
+    bud_info[root.main_bud.id.0].resource = current_resource;
+    calculate_resource_for_each_bud(bud_info, root, current_resource, apical_dominance);
+}
+
 pub fn calculate_local_environment(bud_info: &mut Vec<BudLocalEnvironment>, environment: &Environment, root: &Box<MetamerNode>, rng: &mut StdRng,
                                                                         perception_angle: f32, perception_distance_coef: f32, full_light_exposure: f32,
-                                                                        shadow_volume_angle: f32, shadow_adjustment_coef: f32, shadow_adjustment_base: f32) {
+                                                                        shadow_volume_angle: f32, shadow_adjustment_coef: f32, shadow_adjustment_base: f32,
+                                                                        resource_coef: f32, bud_light_sensitivity: f32, apical_dominance: f32) {
     calculate_optimal_growth_direction(bud_info, environment, root, rng, perception_angle, perception_distance_coef);
     calculate_light_exposure(bud_info, root, full_light_exposure, shadow_volume_angle, shadow_adjustment_coef, shadow_adjustment_base);
+    calculate_resources(bud_info, root, resource_coef, bud_light_sensitivity, apical_dominance);
 }
 
 pub fn generate(tree_info: TreeInfo) -> TreeStructure {
@@ -319,7 +353,8 @@ pub fn generate(tree_info: TreeInfo) -> TreeStructure {
         environment.clear_occupancy_zones(&root, args.occupancy_radius_coef);
         calculate_local_environment(&mut bud_info, &environment, &root, &mut rng, 
             args.bud_perception_angle, args.bud_perception_distance_coef,  args.full_light_exposure,
-            args.shadow_volume_angle, args.shadow_adjustment_coef, args.shadow_adjustment_base);    
+            args.shadow_volume_angle, args.shadow_adjustment_coef, args.shadow_adjustment_base,
+            args.resource_coef, args.bud_light_sensitivity, args.apical_dominance);    
     }
 
     TreeStructure { root: TreeNode::from(root) }
