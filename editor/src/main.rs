@@ -2,6 +2,7 @@ use std::any::TypeId;
 
 use bevy::asset::{HandleId, ReflectAsset};
 use bevy::input::mouse::{MouseScrollUnit, MouseWheel};
+use bevy::pbr::wireframe::WireframePlugin;
 use bevy::prelude::*;
 use bevy::reflect::{TypeRegistryArc, TypeRegistryInternal};
 use bevy::render::camera::Viewport;
@@ -30,6 +31,7 @@ fn main() {
             override_input_system: true,
         })
         .add_plugin(LookTransformPlugin)
+        .add_plugin(WireframePlugin::default())
         .insert_resource(UiState::new())
         .add_system_to_stage(CoreStage::PreUpdate, show_ui_system.at_end())
         .add_startup_system(setup)

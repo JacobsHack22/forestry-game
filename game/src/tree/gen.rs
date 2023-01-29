@@ -39,7 +39,7 @@ pub struct TreeStructure {
 pub fn generate(args: SeedStructure) -> TreeStructure {
     let mut root = TreeNode {
         global_position: Vec3::ZERO,
-        width: 1.0,
+        width: 0.7,
         main_branch: None,
         lateral_branch: None,
     };
@@ -57,7 +57,7 @@ pub fn generate(args: SeedStructure) -> TreeStructure {
 
             let main = TreeNode {
                 global_position: node.global_position + Vec3::new(main_x, 1.0, main_z),
-                width: node.width * 0.9,
+                width: node.width * 0.6,
                 main_branch: None,
                 lateral_branch: None,
             };
@@ -67,7 +67,7 @@ pub fn generate(args: SeedStructure) -> TreeStructure {
 
             let lateral = TreeNode {
                 global_position: node.global_position + Vec3::new(lateral_x, 0.5, lateral_z),
-                width: node.width * 0.9,
+                width: node.width * 0.5,
                 main_branch: None,
                 lateral_branch: None,
             };

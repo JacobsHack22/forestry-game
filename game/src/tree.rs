@@ -4,6 +4,8 @@ use bevy::prelude::*;
 use bevy_prototype_debug_lines::*;
 
 mod gen;
+mod mesh;
+mod post;
 
 pub struct TreePlugin;
 
@@ -23,11 +25,19 @@ struct Tree;
 #[derive(Default, Resource)]
 struct TreePluginData {
     tree_structure: gen::TreeStructure,
+    mesh: Handle<Mesh>,
+    material: Handle<StandardMaterial>,
 }
 
-fn setup_tree(mut commands: Commands) {
+fn setup_tree(
+    mut commands: Commands,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut data: ResMut<TreePluginData>,
+) {
+    data.material = materials.add(Color::WHITE.into());
     commands
-        .spawn(Transform::from_xyz(0.0, 0.0, 0.0))
+        .spawn(SpatialBundle::default())
+        .insert(data.material.clone())
         .insert(Tree);
 }
 
@@ -44,11 +54,20 @@ impl From<TreeInfo> for gen::SeedStructure {
 fn update_tree_structure(
     mut data: ResMut<TreePluginData>,
     current_tree: Res<CurrentTree>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut commands: Commands,
+    tree_entities: Query<Entity, With<Tree>>,
     trees_info: Query<(&TreeInfo, ChangeTrackers<TreeInfo>)>,
 ) {
     let (current_tree_info, change_trackers) = trees_info.get(current_tree.0).unwrap();
     if change_trackers.is_changed() || current_tree.is_changed() {
-        data.tree_structure = gen::generate(current_tree_info.clone().into());
+        let tree_structure = gen::generate(current_tree_info.clone().into());
+        data.tree_structure = post::subdivide(&tree_structure, 5);
+        data.mesh = meshes.add(mesh::build(&data.tree_structure));
+
+        for entity in tree_entities.iter() {
+            commands.entity(entity).insert(data.mesh.clone());
+        }
     }
 }
 
