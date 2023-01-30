@@ -744,6 +744,30 @@ pub fn calculate_branch_sizes(
     current_subtree_size
 }
 
+pub fn update_branch_width(node: &mut MetamerNode, base_branch_width: f32) {
+    let mut child_width_square_sum = 0.0;
+    for bud in [&mut node.main_bud, &mut node.axillary_bud] {
+        match bud.fate {
+            BudFate::Shoot => {
+                let branch_node = bud
+                    .branch_node
+                    .as_mut()
+                    .expect("Shoot should have branch node");
+                update_branch_width(branch_node, base_branch_width);
+                child_width_square_sum += branch_node.width.powi(2);
+            }
+            BudFate::Dead => {
+                if let Some(branch_node) = bud.branch_node.as_mut() {
+                    update_branch_width(branch_node, base_branch_width);
+                    child_width_square_sum += branch_node.width.powi(2);
+                }
+            }
+            _ => (),
+        }
+    }
+    node.width = child_width_square_sum.sqrt();
+}
+
 pub fn generate(tree_info: TreeInfo) -> TreeStructure {
     let args = SeedStructure::from(tree_info);
 
@@ -807,6 +831,8 @@ pub fn generate(tree_info: TreeInfo) -> TreeStructure {
             args.lateral_branching_angle,
             args.branch_self_pruning,
         );
+
+        update_branch_width(&mut root, args.base_branch_width);
     }
 
     TreeStructure {
