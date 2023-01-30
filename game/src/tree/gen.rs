@@ -213,6 +213,7 @@ pub struct BudLocalEnvironment {
     pub optimal_growth_direction: Vec3,
     pub resource: f32,
     pub light_exposure: f32,
+    pub subtree_size: usize,
 }
 
 pub fn find_candidates_for_environment_point(
@@ -633,10 +634,17 @@ pub fn determine_fate_for_each_bud(
     optimal_growth_direction_weight: f32,
     main_branching_angle: f32,
     lateral_branching_angle: f32,
+    prunning_threshold: f32,
 ) {
     for bud in [&mut node.main_bud, &mut node.axillary_bud] {
         match bud.fate {
             BudFate::Shoot => {
+                if bud_info[bud.id.0].resource / (bud_info[bud.id.0].subtree_size as f32)
+                    < prunning_threshold
+                {
+                    bud.fate = BudFate::Dead;
+                    continue;
+                }
                 let branch_node = bud
                     .branch_node
                     .as_mut()
@@ -653,6 +661,7 @@ pub fn determine_fate_for_each_bud(
                     optimal_growth_direction_weight,
                     main_branching_angle,
                     lateral_branching_angle,
+                    prunning_threshold,
                 );
             }
             BudFate::Dormant => {
@@ -694,6 +703,7 @@ pub fn determine_buds_fate(
     optimal_growth_direction_weight: f32,
     main_branching_angle: f32,
     lateral_branching_angle: f32,
+    prunning_threshold: f32,
 ) {
     let hightest_tree_vigor = get_highest_tree_vigor(bud_info, root);
     determine_fate_for_each_bud(
@@ -708,7 +718,30 @@ pub fn determine_buds_fate(
         optimal_growth_direction_weight,
         main_branching_angle,
         lateral_branching_angle,
+        prunning_threshold,
     );
+}
+
+pub fn calculate_branch_sizes(
+    bud_info: &mut Vec<BudLocalEnvironment>,
+    node: &MetamerNode,
+) -> usize {
+    let mut current_subtree_size = 0;
+    for bud in [&node.main_bud, &node.axillary_bud] {
+        match bud.fate {
+            BudFate::Shoot => {
+                let branch_node = bud
+                    .branch_node
+                    .as_ref()
+                    .expect("Shoot should have branch node");
+                bud_info[bud.id.0].subtree_size +=
+                    1 + calculate_branch_sizes(bud_info, branch_node);
+                current_subtree_size += bud_info[bud.id.0].subtree_size;
+            }
+            _ => (),
+        }
+    }
+    current_subtree_size
 }
 
 pub fn generate(tree_info: TreeInfo) -> TreeStructure {
@@ -759,6 +792,8 @@ pub fn generate(tree_info: TreeInfo) -> TreeStructure {
             args.apical_dominance,
         );
 
+        calculate_branch_sizes(&mut bud_info, &root);
+
         determine_buds_fate(
             &bud_info,
             &mut environment,
@@ -770,6 +805,7 @@ pub fn generate(tree_info: TreeInfo) -> TreeStructure {
             args.optimal_growth_direction_weight,
             args.main_branching_angle,
             args.lateral_branching_angle,
+            args.branch_self_pruning,
         );
     }
 
