@@ -1,11 +1,7 @@
-use std::{
-    cmp::max,
-    env,
-    f32::consts::{E, PI},
-};
+use std::f32::consts::PI;
 
-use bevy::{math::Vec3Swizzles, prelude::*};
-use rand::{rngs::StdRng, seq::SliceRandom, Rng, RngCore, SeedableRng};
+use bevy::prelude::*;
+use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
 
 use crate::data::TreeInfo;
 
@@ -17,7 +13,7 @@ struct SeedStructure {
     pub apical_dominance: f32,
     pub bud_light_sensitivity: f32,
     pub branch_self_pruning: f32,
-    pub maximum_shoot_lenght: f32,
+    pub maximum_shoot_length: f32,
     pub tropism_angle: f32,
     pub bud_perception_angle: f32,
     pub bud_perception_distance_coef: f32,
@@ -28,6 +24,7 @@ struct SeedStructure {
     pub shadow_volume_angle: f32,
     pub shadow_adjustment_coef: f32,
     pub shadow_adjustment_base: f32,
+    pub trunk_length: f32,
 
     pub tropism_weight: f32,
     pub current_direction_weight: f32,
@@ -42,7 +39,31 @@ impl From<TreeInfo> for SeedStructure {
     fn from(tree_info: TreeInfo) -> Self {
         SeedStructure {
             seed: tree_info.seed,
-            iterations_count: 5,
+            main_branching_angle: 5.0 * PI / 180.0,
+            lateral_branching_angle: 30.0 * PI / 180.0,
+            apical_dominance: 0.5,
+            bud_light_sensitivity: 1.0,
+            branch_self_pruning: 0.0,
+            maximum_shoot_length: 1.0,
+            tropism_angle: 0.0,
+            bud_perception_angle: PI / 4.0,
+            bud_perception_distance_coef: 5.0,
+            occupancy_radius_coef: 2.0,
+            resource_coef: 1.0,
+            full_light_exposure: 4.0,
+            base_branch_width: 1e-7,
+            shadow_volume_angle: PI / 4.0,
+            shadow_adjustment_coef: 1.0,
+            shadow_adjustment_base: 0.1,
+            trunk_length: 0.3,
+
+            tropism_weight: 0.1,
+            current_direction_weight: 0.4,
+            optimal_growth_direction_weight: 0.5,
+
+            environment_size: 40,
+            environment_points_count: 100000,
+            iterations_count: 20,
             ..default()
         }
     }
@@ -66,8 +87,6 @@ pub enum BudFate {
     Dormant,
     Shoot,
     Dead,
-    Flower,
-    Leaf,
 }
 
 impl Default for BudFate {
@@ -269,6 +288,7 @@ pub fn calculate_optimal_growth_direction(
     rng: &mut StdRng,
     perception_angle: f32,
     perception_distance_coef: f32,
+    trunk_length: f32,
 ) {
     let mut associated_sets: Vec<Vec<Vec3>> = vec![vec![]; environment.get_number_of_buds()];
 
@@ -282,7 +302,7 @@ pub fn calculate_optimal_growth_direction(
             environment_point,
             perception_angle,
             perception_distance_coef,
-            0.0,
+            trunk_length,
         );
 
         let associated_bud = associated_bud_candidates.choose(rng);
@@ -308,9 +328,10 @@ pub fn calculate_shadow_exposure_for_one_node(
     for bud in [&node.main_bud, &node.axillary_bud] {
         match bud.fate {
             BudFate::Dormant => {
-                if (Vec3::new(0.0, 0.0, -1.0).angle_between(
-                    node.global_position.clone() - exposure_node.global_position.clone(),
-                ) <= shadow_volume_angle)
+                if node.global_position.clone() == exposure_node.global_position.clone()
+                    || Vec3::new(0.0, 0.0, -1.0).angle_between(
+                        node.global_position.clone() - exposure_node.global_position.clone(),
+                    ) <= shadow_volume_angle
                 {
                     let bud_id = bud.id.0;
                     bud_info[bud_id].light_exposure -= shadow_adjustment_coef
@@ -322,9 +343,10 @@ pub fn calculate_shadow_exposure_for_one_node(
                 }
             }
             BudFate::Shoot => {
-                if (Vec3::new(0.0, 0.0, -1.0).angle_between(
-                    node.global_position.clone() - exposure_node.global_position.clone(),
-                ) <= shadow_volume_angle)
+                if node.global_position.clone() == exposure_node.global_position.clone()
+                    || Vec3::new(0.0, 0.0, -1.0).angle_between(
+                        node.global_position.clone() - exposure_node.global_position.clone(),
+                    ) <= shadow_volume_angle
                 {
                     let bud_id = bud.id.0;
                     bud_info[bud_id].light_exposure -= shadow_adjustment_coef
@@ -385,6 +407,57 @@ pub fn calculate_shadow_exposure(
     }
 }
 
+pub fn assign_default_exposure(
+    bud_info: &mut Vec<BudLocalEnvironment>,
+    root: &MetamerNode,
+    full_light_exposure: f32,
+    shadow_adjustment_coef: f32,
+) {
+    for bud in [&root.main_bud, &root.axillary_bud] {
+        match bud.fate {
+            BudFate::Dormant => {
+                bud_info[bud.id.0].light_exposure = full_light_exposure + shadow_adjustment_coef;
+            }
+            BudFate::Shoot => {
+                bud_info[bud.id.0].light_exposure = full_light_exposure + shadow_adjustment_coef;
+                assign_default_exposure(
+                    bud_info,
+                    bud.branch_node
+                        .as_ref()
+                        .expect("Shoot should have branch node"),
+                    full_light_exposure,
+                    shadow_adjustment_coef,
+                );
+            }
+            _ => (),
+        }
+    }
+}
+
+pub fn push_light_to_the_root(bud_info: &mut Vec<BudLocalEnvironment>, bud: &Bud) -> f32 {
+    match bud.fate {
+        BudFate::Dormant => bud_info[bud.id.0].light_exposure,
+        BudFate::Shoot => {
+            let light = push_light_to_the_root(
+                bud_info,
+                &bud.branch_node
+                    .as_ref()
+                    .expect("Shoot should have branch node")
+                    .main_bud,
+            ) + push_light_to_the_root(
+                bud_info,
+                &bud.branch_node
+                    .as_ref()
+                    .expect("Shoot should have branch node")
+                    .axillary_bud,
+            );
+            bud_info[bud.id.0].light_exposure = light;
+            light
+        }
+        BudFate::Dead => 0.0,
+    }
+}
+
 pub fn calculate_light_exposure(
     bud_info: &mut Vec<BudLocalEnvironment>,
     root: &MetamerNode,
@@ -393,9 +466,7 @@ pub fn calculate_light_exposure(
     shadow_adjustment_coef: f32,
     shadow_adjustment_base: f32,
 ) {
-    for bud in bud_info.iter_mut() {
-        bud.light_exposure = full_light_exposure + shadow_adjustment_coef;
-    }
+    assign_default_exposure(bud_info, root, full_light_exposure, shadow_adjustment_coef);
     calculate_shadow_exposure(
         bud_info,
         root,
@@ -403,7 +474,8 @@ pub fn calculate_light_exposure(
         shadow_volume_angle,
         shadow_adjustment_coef,
         shadow_adjustment_base,
-    )
+    );
+    push_light_to_the_root(bud_info, &root.main_bud);
 }
 
 pub fn calculate_resource_for_each_bud(
@@ -414,7 +486,6 @@ pub fn calculate_resource_for_each_bud(
 ) {
     let denominator = apical_dominance * bud_info[node.main_bud.id.0].light_exposure
         + (1.0 - apical_dominance) * bud_info[node.axillary_bud.id.0].light_exposure;
-
     match node.main_bud.fate {
         BudFate::Shoot => {
             bud_info[node.main_bud.id.0].resource =
@@ -493,6 +564,7 @@ pub fn calculate_local_environment(
     resource_coef: f32,
     bud_light_sensitivity: f32,
     apical_dominance: f32,
+    trunk_length: f32,
 ) {
     calculate_optimal_growth_direction(
         bud_info,
@@ -501,6 +573,7 @@ pub fn calculate_local_environment(
         rng,
         perception_angle,
         perception_distance_coef,
+        trunk_length,
     );
     calculate_light_exposure(
         bud_info,
@@ -568,7 +641,7 @@ pub fn add_new_shoots(
     bud: &mut Bud,
     environment: &mut Environment,
     rng: &mut StdRng,
-    optimal_growth_direction: Vec3,
+    mut optimal_growth_direction: Vec3,
     tropism_angle: f32,
     number_of_internodes: usize,
     length_of_internodes: f32,
@@ -582,15 +655,22 @@ pub fn add_new_shoots(
     if number_of_internodes == 0 {
         return;
     }
+
+    if optimal_growth_direction == Vec3::NAN {
+        optimal_growth_direction = bud.direction;
+    }
     bud.fate = BudFate::Shoot;
     let mut growth_direction = current_direction_weight * bud.direction
         + optimal_growth_direction * optimal_growth_direction_weight;
     growth_direction = growth_direction
         + tropism_weight * move_tropism_vector_to_growth_plane(tropism_angle, growth_direction);
     growth_direction = growth_direction.normalize();
+
     bud.direction = growth_direction;
+
+    let new_node_position = global_position + growth_direction * length_of_internodes;
     bud.branch_node = Some(Box::new(MetamerNode {
-        global_position: global_position + growth_direction * length_of_internodes,
+        global_position: new_node_position,
         main_bud: Bud {
             fate: BudFate::Dormant,
             direction: growth_direction,
@@ -605,6 +685,7 @@ pub fn add_new_shoots(
         },
         ..default()
     }));
+
     add_new_shoots(
         &mut bud.branch_node.as_mut().unwrap().main_bud,
         environment,
@@ -613,7 +694,7 @@ pub fn add_new_shoots(
         tropism_angle,
         number_of_internodes - 1,
         length_of_internodes,
-        global_position,
+        new_node_position,
         tropism_weight,
         current_direction_weight,
         optimal_growth_direction_weight,
@@ -627,7 +708,7 @@ pub fn determine_fate_for_each_bud(
     environment: &mut Environment,
     node: &mut MetamerNode,
     rng: &mut StdRng,
-    higherst_tree_vigor: f32,
+    highest_tree_vigor: f32,
     tropism_angle: f32,
     tropism_weight: f32,
     current_direction_weight: f32,
@@ -635,6 +716,7 @@ pub fn determine_fate_for_each_bud(
     main_branching_angle: f32,
     lateral_branching_angle: f32,
     prunning_threshold: f32,
+    maximum_shoot_length: f32,
 ) {
     for bud in [&mut node.main_bud, &mut node.axillary_bud] {
         match bud.fate {
@@ -654,7 +736,7 @@ pub fn determine_fate_for_each_bud(
                     environment,
                     branch_node,
                     rng,
-                    higherst_tree_vigor,
+                    highest_tree_vigor,
                     tropism_angle,
                     tropism_weight,
                     current_direction_weight,
@@ -662,14 +744,16 @@ pub fn determine_fate_for_each_bud(
                     main_branching_angle,
                     lateral_branching_angle,
                     prunning_threshold,
+                    maximum_shoot_length,
                 );
             }
             BudFate::Dormant => {
                 if bud_info[bud.id.0].resource >= 1.0 {
-                    let number_of_internodes = bud_info[bud.id.0].resource.floor() as usize;
-                    let length_of_internodes = bud_info[bud.id.0].resource
-                        * (number_of_internodes as f32)
-                        / higherst_tree_vigor;
+                    let number_of_internodes = (bud_info[bud.id.0].resource * maximum_shoot_length
+                        / highest_tree_vigor)
+                        .floor() as usize;
+                    let length_of_internodes =
+                        bud_info[bud.id.0].resource / number_of_internodes as f32;
                     add_new_shoots(
                         bud,
                         environment,
@@ -704,8 +788,10 @@ pub fn determine_buds_fate(
     main_branching_angle: f32,
     lateral_branching_angle: f32,
     prunning_threshold: f32,
+    maximum_shoot_length: f32,
 ) {
     let hightest_tree_vigor = get_highest_tree_vigor(bud_info, root);
+
     determine_fate_for_each_bud(
         bud_info,
         environment,
@@ -719,6 +805,7 @@ pub fn determine_buds_fate(
         main_branching_angle,
         lateral_branching_angle,
         prunning_threshold,
+        maximum_shoot_length,
     );
 }
 
@@ -768,6 +855,21 @@ pub fn update_branch_width(node: &mut MetamerNode, base_branch_width: f32) {
     node.width = child_width_square_sum.sqrt();
 }
 
+pub fn debug_tree(root: &MetamerNode) {
+    for bud in [&root.main_bud, &root.axillary_bud] {
+        match bud.fate {
+            BudFate::Shoot => {
+                let branch_node = bud
+                    .branch_node
+                    .as_ref()
+                    .expect("Shoot should have branch node");
+                debug_tree(branch_node);
+            }
+            _ => (),
+        }
+    }
+}
+
 pub fn generate(tree_info: TreeInfo) -> TreeStructure {
     let args = SeedStructure::from(tree_info);
 
@@ -782,19 +884,20 @@ pub fn generate(tree_info: TreeInfo) -> TreeStructure {
         global_position: Vec3::ZERO,
         width: args.base_branch_width,
         main_bud: Bud {
-            direction: Vec3::new(0.0, 1.0, 0.0),
+            direction: Vec3::new(0.0, 0.0, 1.0),
             id: environment.get_next_bud_id(),
             branch_node: None,
             fate: BudFate::Dormant,
         },
         axillary_bud: Bud {
             direction: Vec3::ZERO,
-            id: BudId(0),
+            id: environment.get_next_bud_id(),
             branch_node: None,
             fate: BudFate::Dead,
         },
     };
 
+    debug_tree(&root);
     for _ in 0..args.iterations_count {
         let mut bud_info: Vec<BudLocalEnvironment> =
             vec![BudLocalEnvironment::default(); environment.get_number_of_buds()];
@@ -814,6 +917,7 @@ pub fn generate(tree_info: TreeInfo) -> TreeStructure {
             args.resource_coef,
             args.bud_light_sensitivity,
             args.apical_dominance,
+            args.trunk_length,
         );
 
         calculate_branch_sizes(&mut bud_info, &root);
@@ -830,12 +934,15 @@ pub fn generate(tree_info: TreeInfo) -> TreeStructure {
             args.main_branching_angle,
             args.lateral_branching_angle,
             args.branch_self_pruning,
+            args.maximum_shoot_length,
         );
 
         update_branch_width(&mut root, args.base_branch_width);
+        debug_tree(&root);
     }
 
-    TreeStructure {
+    let tree = TreeStructure {
         root: TreeNode::from(root),
-    }
+    };
+    return tree;
 }
