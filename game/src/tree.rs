@@ -31,7 +31,6 @@ fn setup_tree(mut commands: Commands) {
         .insert(Tree);
 }
 
-
 fn update_tree_structure(
     mut data: ResMut<TreePluginData>,
     current_tree: Res<CurrentTree>,

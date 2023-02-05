@@ -40,30 +40,30 @@ impl From<TreeInfo> for SeedStructure {
         SeedStructure {
             seed: tree_info.seed,
             main_branching_angle: 5.0 * PI / 180.0,
-            lateral_branching_angle: 30.0 * PI / 180.0,
+            lateral_branching_angle: 70.0 * PI / 180.0,
             apical_dominance: 0.5,
             bud_light_sensitivity: 1.0,
-            branch_self_pruning: 0.0,
+            branch_self_pruning: 0.05,
             maximum_shoot_length: 1.0,
-            tropism_angle: 0.0,
+            tropism_angle: -PI / 4.0,
             bud_perception_angle: PI / 4.0,
             bud_perception_distance_coef: 5.0,
             occupancy_radius_coef: 2.0,
-            resource_coef: 1.0,
+            resource_coef: 0.5,
             full_light_exposure: 4.0,
             base_branch_width: 1e-7,
             shadow_volume_angle: PI / 4.0,
-            shadow_adjustment_coef: 0.0,
-            shadow_adjustment_base: 0.1,
+            shadow_adjustment_coef: 1.0,
+            shadow_adjustment_base: 1.0,
             trunk_length: 0.3,
 
             tropism_weight: 0.1,
-            current_direction_weight: 0.4,
-            optimal_growth_direction_weight: 0.5,
+            current_direction_weight: 0.5,
+            optimal_growth_direction_weight: 0.3,
 
             environment_size: 40,
             environment_points_count: 100000,
-            iterations_count: 5,
+            iterations_count: 20,
             ..default()
         }
     }
@@ -122,13 +122,17 @@ impl From<MetamerNode> for TreeNode {
         TreeNode {
             global_position: node.global_position,
             width: node.width,
-            main_branch: match node.main_bud.branch_node {
-                Some(branch) => Some(Box::new(TreeNode::from(*branch))),
-                None => None,
+            main_branch: match node.main_bud.fate {
+                BudFate::Shoot => Some(Box::new(TreeNode::from(
+                    *node.main_bud.branch_node.unwrap(),
+                ))),
+                _ => None,
             },
-            lateral_branch: match node.axillary_bud.branch_node {
-                Some(branch) => Some(Box::new(TreeNode::from(*branch))),
-                None => None,
+            lateral_branch: match node.axillary_bud.fate {
+                BudFate::Shoot => Some(Box::new(TreeNode::from(
+                    *node.axillary_bud.branch_node.unwrap(),
+                ))),
+                _ => None,
             },
         }
     }
@@ -215,7 +219,7 @@ pub fn generate_environment(
 
     for _ in 0..environment_points_count {
         let x = rng.gen_range(-(environment_size as f32)..=environment_size as f32);
-        let y = rng.gen_range(-(environment_size as f32)..=environment_size as f32);
+        let y = rng.gen_range((0.0)..=environment_size as f32);
         let z = rng.gen_range(-(environment_size as f32)..=environment_size as f32);
 
         points.push(Vec3::new(x as f32, y as f32, z as f32));
@@ -332,6 +336,10 @@ pub fn calculate_optimal_growth_direction(
     }
 
     for (i, set) in associated_sets.iter().enumerate() {
+        if i == 0 {
+            bud_info[i].optimal_growth_direction = Vec3::new(0.0, 1.0, 0.0);
+            continue;
+        }
         if !set.is_empty() {
             bud_info[i].optimal_growth_direction = set.iter().sum::<Vec3>().normalize();
         }
@@ -347,12 +355,12 @@ pub fn calculate_shadow_exposure_for_one_node(
     shadow_adjustment_base: f32,
 ) {
     for bud in [&node.main_bud, &node.axillary_bud] {
+        let angle_between = Vec3::new(0.0, -1.0, 0.0)
+            .angle_between(node.global_position.clone() - exposure_node.global_position.clone());
         match bud.fate {
             BudFate::Dormant => {
                 if node.global_position.clone() == exposure_node.global_position.clone()
-                    || Vec3::new(0.0, 0.0, -1.0).angle_between(
-                        node.global_position.clone() - exposure_node.global_position.clone(),
-                    ) <= shadow_volume_angle
+                    || angle_between <= shadow_volume_angle
                 {
                     let bud_id = bud.id.0;
                     bud_info[bud_id].light_exposure -= shadow_adjustment_coef
@@ -365,9 +373,7 @@ pub fn calculate_shadow_exposure_for_one_node(
             }
             BudFate::Shoot => {
                 if node.global_position.clone() == exposure_node.global_position.clone()
-                    || Vec3::new(0.0, 0.0, -1.0).angle_between(
-                        node.global_position.clone() - exposure_node.global_position.clone(),
-                    ) <= shadow_volume_angle
+                    || angle_between <= shadow_volume_angle
                 {
                     let bud_id = bud.id.0;
                     bud_info[bud_id].light_exposure -= shadow_adjustment_coef
@@ -376,17 +382,17 @@ pub fn calculate_shadow_exposure_for_one_node(
                     if bud_info[bud_id].light_exposure < 0.0 {
                         bud_info[bud_id].light_exposure = 0.0;
                     }
-                    calculate_shadow_exposure_for_one_node(
-                        bud_info,
-                        exposure_node,
-                        bud.branch_node
-                            .as_ref()
-                            .expect("Shoot should have branch node"),
-                        shadow_volume_angle,
-                        shadow_adjustment_coef,
-                        shadow_adjustment_base,
-                    );
                 }
+                calculate_shadow_exposure_for_one_node(
+                    bud_info,
+                    exposure_node,
+                    bud.branch_node
+                        .as_ref()
+                        .expect("Shoot should have branch node"),
+                    shadow_volume_angle,
+                    shadow_adjustment_coef,
+                    shadow_adjustment_base,
+                );
             }
             _ => (),
         }
@@ -641,16 +647,18 @@ pub fn get_highest_tree_vigor(bud_info: &Vec<BudLocalEnvironment>, root: &Metame
 }
 
 pub fn move_tropism_vector_to_growth_plane(tropism_angle: f32, growth_direction: Vec3) -> Vec3 {
-    let tropism_vector_2_d = Vec2::from_angle(tropism_angle);
-    let tropism_vector_xy = Vec2::new(0.0, tropism_vector_2_d.x);
-    let tropism_vector_xy_rotated = if growth_direction.clone().truncate().length() == 0.0 {
-        tropism_vector_xy
-    } else {
-        growth_direction.truncate().rotate(tropism_vector_xy)
-    };
-    tropism_vector_xy_rotated
-        .extend(tropism_vector_2_d.y)
-        .normalize()
+    let mut tropism_vector_2_d = Vec2::from_angle(tropism_angle);
+    let growth_direction_truncated = Vec2::new(growth_direction.x, growth_direction.z);
+    if growth_direction_truncated.length() != 0.0 {
+        let scale = growth_direction_truncated.length() / tropism_vector_2_d.x;
+        tropism_vector_2_d = tropism_vector_2_d * scale;
+    }
+    Vec3::new(
+        growth_direction_truncated.x,
+        tropism_vector_2_d.y,
+        growth_direction_truncated.y,
+    )
+    .normalize()
 }
 
 pub fn get_random_direction_in_cone(direction: Vec3, angle: f32, rng: &mut StdRng) -> Vec3 {
@@ -666,7 +674,7 @@ pub fn add_new_shoots(
     bud: &mut Bud,
     environment: &mut Environment,
     rng: &mut StdRng,
-    mut optimal_growth_direction: Vec3,
+    optimal_growth_direction: Vec3,
     tropism_angle: f32,
     number_of_internodes: usize,
     length_of_internodes: f32,
@@ -907,7 +915,7 @@ pub fn generate(tree_info: TreeInfo) -> TreeStructure {
         global_position: Vec3::ZERO,
         width: args.base_branch_width,
         main_bud: Bud {
-            direction: Vec3::new(0.0, 0.0, 1.0),
+            direction: Vec3::new(0.0, 1.0, 0.0),
             id: environment.get_next_bud_id(),
             branch_node: None,
             fate: BudFate::Dormant,
@@ -920,7 +928,6 @@ pub fn generate(tree_info: TreeInfo) -> TreeStructure {
         },
     };
 
-    debug_tree(&root);
     for _ in 0..args.iterations_count {
         let mut bud_info: Vec<BudLocalEnvironment> =
             vec![BudLocalEnvironment::default(); environment.get_number_of_buds()];
@@ -961,7 +968,6 @@ pub fn generate(tree_info: TreeInfo) -> TreeStructure {
         );
 
         update_branch_width(&mut root, args.base_branch_width);
-        debug_tree(&root);
     }
 
     let tree = TreeStructure {
