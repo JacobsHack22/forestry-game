@@ -53,7 +53,7 @@ impl From<TreeInfo> for SeedStructure {
             full_light_exposure: 4.0,
             base_branch_width: 1e-7,
             shadow_volume_angle: PI / 4.0,
-            shadow_adjustment_coef: 1.0,
+            shadow_adjustment_coef: 0.0,
             shadow_adjustment_base: 0.1,
             trunk_length: 0.3,
 
@@ -63,7 +63,7 @@ impl From<TreeInfo> for SeedStructure {
 
             environment_size: 40,
             environment_points_count: 100000,
-            iterations_count: 20,
+            iterations_count: 5,
             ..default()
         }
     }
@@ -281,6 +281,24 @@ pub fn find_candidates_for_environment_point(
     }
 }
 
+pub fn set_default_optimal_growth_direction(
+    bud_info: &mut Vec<BudLocalEnvironment>,
+    root: &MetamerNode,
+) {
+    for bud in [&root.main_bud, &root.axillary_bud] {
+        match bud.fate {
+            BudFate::Dormant => {
+                bud_info[bud.id.0].optimal_growth_direction = bud.direction;
+            }
+            BudFate::Shoot => {
+                bud_info[bud.id.0].optimal_growth_direction = bud.direction;
+                set_default_optimal_growth_direction(bud_info, bud.branch_node.as_ref().unwrap());
+            }
+            _ => (),
+        }
+    }
+}
+
 pub fn calculate_optimal_growth_direction(
     bud_info: &mut Vec<BudLocalEnvironment>,
     environment: &Environment,
@@ -290,6 +308,7 @@ pub fn calculate_optimal_growth_direction(
     perception_distance_coef: f32,
     trunk_length: f32,
 ) {
+    set_default_optimal_growth_direction(bud_info, root);
     let mut associated_sets: Vec<Vec<Vec3>> = vec![vec![]; environment.get_number_of_buds()];
 
     for environment_point in &environment.points {
@@ -313,7 +332,9 @@ pub fn calculate_optimal_growth_direction(
     }
 
     for (i, set) in associated_sets.iter().enumerate() {
-        bud_info[i].optimal_growth_direction = set.iter().sum::<Vec3>().normalize();
+        if !set.is_empty() {
+            bud_info[i].optimal_growth_direction = set.iter().sum::<Vec3>().normalize();
+        }
     }
 }
 
@@ -622,7 +643,11 @@ pub fn get_highest_tree_vigor(bud_info: &Vec<BudLocalEnvironment>, root: &Metame
 pub fn move_tropism_vector_to_growth_plane(tropism_angle: f32, growth_direction: Vec3) -> Vec3 {
     let tropism_vector_2_d = Vec2::from_angle(tropism_angle);
     let tropism_vector_xy = Vec2::new(0.0, tropism_vector_2_d.x);
-    let tropism_vector_xy_rotated = growth_direction.truncate().rotate(tropism_vector_xy);
+    let tropism_vector_xy_rotated = if growth_direction.clone().truncate().length() == 0.0 {
+        tropism_vector_xy
+    } else {
+        growth_direction.truncate().rotate(tropism_vector_xy)
+    };
     tropism_vector_xy_rotated
         .extend(tropism_vector_2_d.y)
         .normalize()
@@ -656,14 +681,12 @@ pub fn add_new_shoots(
         return;
     }
 
-    if optimal_growth_direction == Vec3::NAN {
-        optimal_growth_direction = bud.direction;
-    }
     bud.fate = BudFate::Shoot;
     let mut growth_direction = current_direction_weight * bud.direction
         + optimal_growth_direction * optimal_growth_direction_weight;
-    growth_direction = growth_direction
-        + tropism_weight * move_tropism_vector_to_growth_plane(tropism_angle, growth_direction);
+    let tropism_vector =
+        move_tropism_vector_to_growth_plane(tropism_angle, growth_direction.clone().normalize());
+    growth_direction = growth_direction + tropism_weight * tropism_vector;
     growth_direction = growth_direction.normalize();
 
     bud.direction = growth_direction;
