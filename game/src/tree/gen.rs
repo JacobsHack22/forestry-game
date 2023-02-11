@@ -40,11 +40,11 @@ impl From<TreeInfo> for SeedStructure {
         SeedStructure {
             seed: tree_info.seed,
             main_branching_angle: 5.0 * PI / 180.0,
-            lateral_branching_angle: 70.0 * PI / 180.0,
-            apical_dominance: 0.5,
+            lateral_branching_angle: 20.0 * PI / 180.0,
+            apical_dominance: 0.50,
             bud_light_sensitivity: 1.0,
-            branch_self_pruning: 0.05,
-            maximum_shoot_length: 1.0,
+            branch_self_pruning: 0.3,
+            maximum_shoot_length: 4.0,
             tropism_angle: -PI / 4.0,
             bud_perception_angle: PI / 4.0,
             bud_perception_distance_coef: 5.0,
@@ -54,16 +54,16 @@ impl From<TreeInfo> for SeedStructure {
             base_branch_width: 1e-7,
             shadow_volume_angle: PI / 4.0,
             shadow_adjustment_coef: 1.0,
-            shadow_adjustment_base: 1.0,
+            shadow_adjustment_base: 2.0,
             trunk_length: 0.3,
 
-            tropism_weight: 0.1,
-            current_direction_weight: 0.5,
-            optimal_growth_direction_weight: 0.3,
+            tropism_weight: 0.2,
+            current_direction_weight: 0.8,
+            optimal_growth_direction_weight: 0.7,
 
             environment_size: 40,
             environment_points_count: 100000,
-            iterations_count: 20,
+            iterations_count: 8,
             ..default()
         }
     }
@@ -689,7 +689,6 @@ pub fn add_new_shoots(
         return;
     }
 
-    bud.fate = BudFate::Shoot;
     let mut growth_direction = current_direction_weight * bud.direction
         + optimal_growth_direction * optimal_growth_direction_weight;
     let tropism_vector =
@@ -700,6 +699,10 @@ pub fn add_new_shoots(
     bud.direction = growth_direction;
 
     let new_node_position = global_position + growth_direction * length_of_internodes;
+    if new_node_position.y < 0.0 {
+        return;
+    }
+    bud.fate = BudFate::Shoot;
     bud.branch_node = Some(Box::new(MetamerNode {
         global_position: new_node_position,
         main_bud: Bud {
