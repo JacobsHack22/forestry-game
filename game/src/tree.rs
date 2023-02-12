@@ -52,7 +52,8 @@ fn update_tree_structure(
     let (current_tree_info, change_trackers) = trees_info.get(current_tree.0).unwrap();
     if change_trackers.is_changed() || current_tree.is_changed() {
         let tree_structure = gen::generate(current_tree_info.clone().into());
-        data.tree_structure = post::subdivide(&tree_structure, 5);
+        // let tree_structure = post::subdivide(&tree_structure, 5);
+        data.tree_structure = tree_structure;
         data.mesh = meshes.add(mesh::build(&data.tree_structure));
 
         for entity in tree_entities.iter() {

@@ -116,9 +116,9 @@ impl Plugin for DataPlugin {
             .add_event::<QuestCompletedEvent>()
             .add_event::<QuestMissedEvent>()
             .add_event::<QuestAppearedEvent>()
-            .add_system(handle_events)
-            .add_system(check_deadline)
-            .add_system(check_next_quest);
+            .add_system(handle_events);
+        // .add_system(check_deadline)
+        // .add_system(check_next_quest);
     }
 }
 
