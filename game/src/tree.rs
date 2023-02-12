@@ -41,16 +41,6 @@ fn setup_tree(
         .insert(Tree);
 }
 
-impl From<TreeInfo> for gen::SeedStructure {
-    fn from(tree_info: TreeInfo) -> Self {
-        gen::SeedStructure {
-            seed: tree_info.seed,
-            iterations_count: 5,
-            ..default()
-        }
-    }
-}
-
 fn update_tree_structure(
     mut data: ResMut<TreePluginData>,
     current_tree: Res<CurrentTree>,
