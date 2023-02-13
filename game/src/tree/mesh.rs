@@ -48,6 +48,10 @@ struct TreeMeshBuilder<'a> {
     indices: &'a mut Vec<u32>,
 }
 
+fn my_array_windows<T, const N: usize>(slice: &[T]) -> impl Iterator<Item = &[T; N]> {
+    slice.windows(N).map(|window| window.try_into().unwrap())
+}
+
 impl TreeMeshBuilder<'_> {
     fn build_child(
         &mut self,
@@ -60,8 +64,8 @@ impl TreeMeshBuilder<'_> {
     }
 
     fn build_branch(&mut self, current_circle_indices: &[u32], child_circle_indices: &[u32]) {
-        let current_circle_windows = current_circle_indices.array_windows::<2>();
-        let child_circle_windows = child_circle_indices.array_windows::<2>();
+        let current_circle_windows = my_array_windows::<_, 2>(current_circle_indices);
+        let child_circle_windows = my_array_windows::<_, 2>(child_circle_indices);
 
         current_circle_windows.zip(child_circle_windows).for_each(
             |(&[cur_fst, cur_snd], &[child_fst, child_snd])| {
